@@ -1,0 +1,98 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:yandex_mapkit/yandex_mapkit.dart';
+
+import 'config/app_theme.dart';
+import 'config/api_config.dart';
+import 'services/auth_service.dart';
+import 'providers/account_provider.dart';
+import 'providers/product_provider.dart';
+import 'providers/transfer_provider.dart';
+import 'screens/login_screen.dart';
+import 'screens/home_screen.dart';
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Yandex MapKit
+  AndroidYandexMap.useAndroidViewSurface = false;
+
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        Provider<AuthService>(
+          create: (_) => AuthService(),
+        ),
+        ChangeNotifierProxyProvider<AuthService, AccountProvider>(
+          create: (context) => AccountProvider(context.read<AuthService>()),
+          update: (context, authService, previous) =>
+              previous ?? AccountProvider(authService),
+        ),
+        ChangeNotifierProxyProvider<AuthService, ProductProvider>(
+          create: (context) => ProductProvider(context.read<AuthService>()),
+          update: (context, authService, previous) =>
+              previous ?? ProductProvider(authService),
+        ),
+        ChangeNotifierProxyProvider<AuthService, TransferProvider>(
+          create: (context) => TransferProvider(context.read<AuthService>()),
+          update: (context, authService, previous) =>
+              previous ?? TransferProvider(authService),
+        ),
+      ],
+      child: MaterialApp(
+        title: 'Multi-Bank App',
+        theme: AppTheme.lightTheme,
+        debugShowCheckedModeBanner: false,
+        home: const AppInitializer(),
+      ),
+    );
+  }
+}
+
+class AppInitializer extends StatefulWidget {
+  const AppInitializer({super.key});
+
+  @override
+  State<AppInitializer> createState() => _AppInitializerState();
+}
+
+class _AppInitializerState extends State<AppInitializer> {
+  bool _isInitialized = false;
+  bool _isAuthenticated = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    final authService = context.read<AuthService>();
+    await authService.initialize();
+
+    setState(() {
+      _isAuthenticated = authService.isAuthenticated;
+      _isInitialized = true;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (!_isInitialized) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    return _isAuthenticated ? const HomeScreen() : const LoginScreen();
+  }
+}
