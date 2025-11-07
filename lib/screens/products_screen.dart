@@ -14,8 +14,16 @@ class ProductsScreen extends StatelessWidget {
       length: 3,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Продукты'),
+          title: const Text(
+            'Продукты',
+            style: TextStyle(color: Colors.white), // Белый цвет текста
+          ),
+          backgroundColor: AppTheme.primaryBlue, // Цвет фона AppBar
+          iconTheme: const IconThemeData(color: Colors.white), // Белый цвет иконок
           bottom: const TabBar(
+            labelColor: Colors.white, // Белый цвет выбранной вкладки
+            unselectedLabelColor: Colors.white70, // Светло-белый для невыбранных
+            indicatorColor: Colors.white, // Белый цвет индикатора
             tabs: [
               Tab(text: 'Вклады'),
               Tab(text: 'Кредиты'),
@@ -43,6 +51,7 @@ class ProductsScreen extends StatelessWidget {
   }
 }
 
+// Остальной код без изменений...
 class _ProductList extends StatelessWidget {
   final List products;
   final String type;
@@ -69,8 +78,8 @@ class _ProductList extends StatelessWidget {
                 type == 'deposit'
                     ? Icons.savings
                     : type == 'loan'
-                        ? Icons.account_balance_wallet
-                        : Icons.credit_card,
+                    ? Icons.account_balance_wallet
+                    : Icons.credit_card,
                 color: AppTheme.primaryBlue,
               ),
             ),
@@ -217,10 +226,10 @@ class _OpenProductDialogState extends State<_OpenProductDialog> {
           onPressed: _isProcessing ? null : _submit,
           child: _isProcessing
               ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
+          )
               : const Text('Оформить'),
         ),
       ],

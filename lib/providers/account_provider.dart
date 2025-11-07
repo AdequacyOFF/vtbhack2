@@ -2,18 +2,21 @@ import 'package:flutter/foundation.dart';
 import '../models/bank_account.dart';
 import '../models/transaction.dart';
 import '../services/auth_service.dart';
+import '../services/notification_service.dart';
 
 class AccountProvider with ChangeNotifier {
   final AuthService _authService;
+  final NotificationService _notificationService;
 
   List<BankAccount> _accounts = [];
   Map<String, double> _balances = {};
   Map<String, List<BankTransaction>> _transactions = {};
+  final Map<String, double> _previousBalances = {};
 
   bool _isLoading = false;
   String? _error;
 
-  AccountProvider(this._authService);
+  AccountProvider(this._authService, this._notificationService);
 
   List<BankAccount> get accounts => _accounts;
   Map<String, double> get balances => _balances;
@@ -54,6 +57,9 @@ class AccountProvider with ChangeNotifier {
       final allAccounts = <BankAccount>[];
       final allBalances = <String, double>{};
 
+      // Сохраняем предыдущие балансы для сравнения
+      final previousBalances = Map<String, double>.from(_balances);
+
       // Fetch from all banks
       for (final bankCode in _authService.supportedBanks) {
         try {
@@ -71,7 +77,11 @@ class AccountProvider with ChangeNotifier {
             for (final account in accounts) {
               try {
                 final balanceData = await service.getBalance(account.accountId, consent.consentId);
-                allBalances[account.accountId] = balanceData['balance'] ?? 0.0;
+                final newBalance = balanceData['balance'] ?? 0.0;
+                allBalances[account.accountId] = newBalance;
+
+                // Проверяем изменение баланса
+                _checkBalanceChange(account, newBalance, previousBalances[account.accountId]);
               } catch (e) {
                 debugPrint('Error fetching balance for ${account.accountId}: $e');
                 allBalances[account.accountId] = 0.0;
@@ -80,6 +90,11 @@ class AccountProvider with ChangeNotifier {
           } else if (consent.isPending) {
             // Consent is pending manual approval
             _consentErrors[bankCode] = 'Требуется подтверждение согласия в банке';
+            _notificationService.addNotification(
+              title: 'Требуется подтверждение',
+              message: 'Согласие с ${_getBankName(bankCode)} ожидает подтверждения',
+              type: NotificationType.warning,
+            );
             debugPrint('Consent pending for $bankCode - manual approval required');
           }
         } catch (e) {
@@ -89,10 +104,14 @@ class AccountProvider with ChangeNotifier {
           // Check if it's a consent error
           if (errorMsg.contains('CONSENT_REQUIRED') || errorMsg.contains('consent')) {
             _consentErrors[bankCode] = 'Требуется создание или подтверждение согласия';
+            _notificationService.addNotification(
+              title: 'Проблема с согласием',
+              message: 'Требуется обновить согласие с ${_getBankName(bankCode)}',
+              type: NotificationType.error,
+            );
           } else {
             _consentErrors[bankCode] = 'Ошибка загрузки данных';
           }
-          // Continue with other banks even if one fails
         }
       }
 
@@ -107,6 +126,39 @@ class AccountProvider with ChangeNotifier {
     }
   }
 
+  /// Проверяет изменение баланса и создает уведомление
+  void _checkBalanceChange(BankAccount account, double newBalance, double? oldBalance) {
+    if (oldBalance != null && oldBalance != newBalance) {
+      final difference = newBalance - oldBalance;
+      final absDifference = difference.abs();
+
+      if (absDifference > 0.01) {
+        final direction = difference > 0 ? 'поступило' : 'списано';
+        final amount = absDifference.toStringAsFixed(2);
+
+        _notificationService.addNotification(
+          title: 'Изменение баланса',
+          message: 'На счет ${_maskAccountNumber(account.displayName)} $direction $amount ${account.currency}',
+          type: difference > 0 ? NotificationType.success : NotificationType.info,
+        );
+      }
+    }
+  }
+
+  String _maskAccountNumber(String accountNumber) {
+    if (accountNumber.length <= 4) return accountNumber;
+    return '***${accountNumber.substring(accountNumber.length - 4)}';
+  }
+
+  String _getBankName(String bankCode) {
+    switch (bankCode) {
+      case 'vbank': return 'ВТБ';
+      case 'abank': return 'Альфа-Банк';
+      case 'sbank': return 'Сбербанк';
+      default: return bankCode;
+    }
+  }
+
   /// Fetches transactions for a specific account
   Future<void> fetchTransactionsForAccount(String accountId) async {
     try {
@@ -115,18 +167,45 @@ class AccountProvider with ChangeNotifier {
       final consent = await _authService.getAccountConsent(account.bankCode);
 
       if (consent.isApproved) {
-        final transactions = await service.getTransactions(
+        final previousTransactions = _transactions[accountId] ?? [];
+        final newTransactions = await service.getTransactions(
           accountId,
           consent.consentId,
           fromDate: DateTime.now().subtract(const Duration(days: 365)).toIso8601String(),
           toDate: DateTime.now().toIso8601String(),
         );
 
-        _transactions[accountId] = transactions;
+        _transactions[accountId] = newTransactions;
+
+        // Проверяем новые транзакции
+        _checkNewTransactions(account, newTransactions, previousTransactions);
+
         notifyListeners();
       }
     } catch (e) {
       debugPrint('Error fetching transactions for $accountId: $e');
+    }
+  }
+
+  /// Проверяет новые транзакции и создает уведомления
+  void _checkNewTransactions(BankAccount account, List<BankTransaction> newTransactions, List<BankTransaction> previousTransactions) {
+    final previousIds = previousTransactions.map((t) => t.transactionId).toSet();
+    final newOnes = newTransactions.where((t) => !previousIds.contains(t.transactionId)).toList();
+
+    for (final transaction in newOnes) {
+      // Преобразуем bookingDateTime в DateTime
+      final bookingDate = DateTime.tryParse(transaction.bookingDateTime);
+      if (bookingDate != null && bookingDate.isAfter(DateTime.now().subtract(const Duration(hours: 24)))) {
+        final amount = transaction.amountValue;
+        final direction = transaction.isCredit ? 'Поступление' : 'Списание';
+        final description = transaction.transactionInformation ?? "Без описания";
+
+        _notificationService.addNotification(
+          title: 'Новая операция',
+          message: '$direction: ${amount.toStringAsFixed(2)} ${transaction.currency} - $description',
+          type: transaction.isCredit ? NotificationType.success : NotificationType.info,
+        );
+      }
     }
   }
 
@@ -153,8 +232,12 @@ class AccountProvider with ChangeNotifier {
       allTx.addAll(txList);
     });
 
-    // Sort by date descending
-    allTx.sort((a, b) => b.bookingDateTime.compareTo(a.bookingDateTime));
+    // Сортируем по bookingDateTime (преобразуя в DateTime)
+    allTx.sort((a, b) {
+      final dateA = DateTime.tryParse(a.bookingDateTime) ?? DateTime(0);
+      final dateB = DateTime.tryParse(b.bookingDateTime) ?? DateTime(0);
+      return dateB.compareTo(dateA);
+    });
     return allTx;
   }
 

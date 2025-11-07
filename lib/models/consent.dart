@@ -37,6 +37,7 @@ class AccountConsent {
   bool get isPending => status == 'pending' || status == 'awaiting_authorization';
 }
 
+
 class PaymentConsent {
   final String consentId;
   final String bankCode;
@@ -97,6 +98,8 @@ class ProductAgreementConsent {
     );
   }
 
+
+
   Map<String, dynamic> toJson() {
     return {
       'consentId': consentId,
@@ -108,3 +111,4 @@ class ProductAgreementConsent {
 
   bool get isApproved => status == 'approved';
 }
+
