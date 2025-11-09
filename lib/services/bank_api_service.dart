@@ -240,10 +240,18 @@ class BankApiService {
 
   // Products
   Future<List<BankProduct>> getProducts({String? productType}) async {
+    final token = await ensureValidToken();
+
     final queryParams = productType != null ? {'product_type': productType} : null;
     final uri = Uri.parse('$baseUrl/products').replace(queryParameters: queryParams);
 
-    final response = await http.get(uri);
+    final response = await http.get(
+      uri,
+      headers: {
+        ..._authHeaders(token),
+        'x-requesting-bank': ApiConfig.clientId,
+      },
+    );
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
@@ -257,7 +265,15 @@ class BankApiService {
   }
 
   Future<BankProduct> getProduct(String productId) async {
-    final response = await http.get(Uri.parse('$baseUrl/products/$productId'));
+    final token = await ensureValidToken();
+
+    final response = await http.get(
+      Uri.parse('$baseUrl/products/$productId'),
+      headers: {
+        ..._authHeaders(token),
+        'x-requesting-bank': ApiConfig.clientId,
+      },
+    );
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);

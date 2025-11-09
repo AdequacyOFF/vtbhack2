@@ -28,9 +28,27 @@ class AccountProvider with ChangeNotifier {
     return _balances.values.fold(0.0, (sum, balance) => sum + balance);
   }
 
+  /// Creates a unique key for balance storage by combining bank code and account ID
+  String _getBalanceKey(String bankCode, String accountId) {
+    return '$bankCode:$accountId';
+  }
+
+  /// Gets balance for a specific account using composite key
+  double getBalance(BankAccount account) {
+    final balanceKey = _getBalanceKey(account.bankCode, account.accountId);
+    return _balances[balanceKey] ?? 0.0;
+  }
+
+  /// Gets balance by accountId and bankCode (for when you don't have the account object)
+  double getBalanceByIds(String bankCode, String accountId) {
+    final balanceKey = _getBalanceKey(bankCode, accountId);
+    return _balances[balanceKey] ?? 0.0;
+  }
+
   List<BankAccount> get accountsSortedByBalance {
     final accountsWithBalance = _accounts.map((account) {
-      return account.copyWith(balance: _balances[account.accountId]);
+      final balanceKey = _getBalanceKey(account.bankCode, account.accountId);
+      return account.copyWith(balance: _balances[balanceKey]);
     }).toList();
 
     accountsWithBalance.sort((a, b) => (b.balance ?? 0).compareTo(a.balance ?? 0));
@@ -78,13 +96,15 @@ class AccountProvider with ChangeNotifier {
               try {
                 final balanceData = await service.getBalance(account.accountId, consent.consentId);
                 final newBalance = balanceData['balance'] ?? 0.0;
-                allBalances[account.accountId] = newBalance;
+                final balanceKey = _getBalanceKey(bankCode, account.accountId);
+                allBalances[balanceKey] = newBalance;
 
                 // Проверяем изменение баланса
-                _checkBalanceChange(account, newBalance, previousBalances[account.accountId]);
+                _checkBalanceChange(account, newBalance, previousBalances[balanceKey]);
               } catch (e) {
                 debugPrint('Error fetching balance for ${account.accountId}: $e');
-                allBalances[account.accountId] = 0.0;
+                final balanceKey = _getBalanceKey(bankCode, account.accountId);
+                allBalances[balanceKey] = 0.0;
               }
             }
           } else if (consent.isPending) {
