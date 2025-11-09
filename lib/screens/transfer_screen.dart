@@ -61,7 +61,7 @@ class _TransferScreenState extends State<TransferScreen> {
                           prefixIcon: Icon(Icons.account_balance_wallet),
                         ),
                         items: accounts.map<DropdownMenuItem<BankAccount>>((account) {
-                          final balance = accountProvider.balances[account.accountId] ?? 0.0;
+                          final balance = accountProvider.getBalance(account);
                           return DropdownMenuItem<BankAccount>(
                             value: account,
                             child: Text('${account.displayName} (${balance.toStringAsFixed(2)} ₽)'),
@@ -92,7 +92,7 @@ class _TransferScreenState extends State<TransferScreen> {
                           prefixIcon: Icon(Icons.account_balance),
                         ),
                         items: accounts.map<DropdownMenuItem<BankAccount>>((account) {
-                          final balance = accountProvider.balances[account.accountId] ?? 0.0;
+                          final balance = accountProvider.getBalance(account);
                           return DropdownMenuItem<BankAccount>(
                             value: account,
                             child: Text('${account.displayName} (${balance.toStringAsFixed(2)} ₽)'),

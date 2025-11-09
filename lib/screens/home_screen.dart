@@ -406,7 +406,7 @@ class DashboardTab extends StatelessWidget {
                       ),
                     ),
                     ...accounts.map((account) {
-                      final balance = accountProvider.balances[account.accountId] ?? 0.0;
+                      final balance = accountProvider.getBalance(account);
                       return Card(
                         margin: const EdgeInsets.only(bottom: 12),
                         child: ListTile(

@@ -31,7 +31,7 @@ class _AccountsScreenState extends State<AccountsScreen> {
       ),
       body: Consumer<AccountProvider>(
         builder: (context, provider, child) {
-          final balance = provider.balances[widget.account.accountId] ?? 0.0;
+          final balance = provider.getBalance(widget.account);
           final transactions = provider.transactions[widget.account.accountId] ?? [];
 
           return ListView(

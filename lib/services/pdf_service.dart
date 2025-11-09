@@ -36,7 +36,8 @@ class PdfService {
     // Calculate totals
     double totalBalance = 0;
     for (var account in limitedAccounts) {
-      totalBalance += balances[account.accountId] ?? 0;
+      final balanceKey = '${account.bankCode}:${account.accountId}';
+      totalBalance += balances[balanceKey] ?? 0;
     }
 
     final totalAccounts = accounts.length;
@@ -80,7 +81,8 @@ class PdfService {
 
           // Account sections
           ...limitedAccounts.map((account) {
-            final accountBalance = balances[account.accountId] ?? 0;
+            final balanceKey = '${account.bankCode}:${account.accountId}';
+            final accountBalance = balances[balanceKey] ?? 0;
             final transactions = transactionsByAccount[account.accountId] ?? [];
 
             return pw.Column(
