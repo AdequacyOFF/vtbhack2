@@ -126,11 +126,29 @@ lib/
 - Stores tokens and consents in SharedPreferences
 
 #### 2. Account Aggregation
-`AccountProvider` fetches accounts from all banks in parallel:
+`AccountProvider` fetches accounts from all banks **sequentially** (despite comments saying "parallel"):
 ```dart
-// Fetches accounts from vbank, abank, sbank
+// Fetches accounts from vbank, abank, sbank sequentially
+// One bank failure doesn't break aggregation - errors stored in _consentErrors
 await accountProvider.fetchAllAccounts();
 ```
+
+**Balance Storage - Composite Key Pattern (CRITICAL)**:
+Balances use composite keys to prevent collision when same account ID exists across banks:
+```dart
+// Format: 'bankCode:accountId'
+Map<String, double> _balances = {
+  'vbank:12345': 1000.0,
+  'abank:12345': 2000.0,  // Different account despite same ID
+  'sbank:99999': 5000.0,
+};
+
+// Access methods
+String _getBalanceKey(String bankCode, String accountId) => '$bankCode:$accountId';
+double getBalance(BankAccount account) => _balances[_getBalanceKey(account.bankCode, account.accountId)] ?? 0.0;
+```
+
+**Why composite keys?** Same account IDs can exist across different banks. Without composite keys, balances overwrite each other.
 
 #### 3. Smart Product Selection
 `ProductProvider` compares products across banks:
@@ -249,15 +267,33 @@ Body: {
 
 ### State Management Pattern
 
+**Three-Tier Provider Architecture**:
+
+**Tier 1 - Singleton Services**:
+- `AuthService`: Token lifecycle, consent management, delegates to `BankApiService` instances (one per bank)
+- `NotificationService`: ChangeNotifier with reversed list (newest first), unread count tracking
+- `ConsentPollingService`: Auto-polls every 10s (max 120 attempts = 20 min), **must be disposed**
+
+**Tier 2 - Reactive Providers**:
+- `AccountProvider`: Manages accounts with composite key balances, receives both AuthService + NotificationService
+- `ProductProvider`: Fetches/compares products across banks
+- `TransferProvider`: Handles inter/intra-bank payments
+
 Using Provider with ChangeNotifierProxy:
 ```dart
 MultiProvider(
   providers: [
     Provider<AuthService>(),
     ChangeNotifierProvider<NotificationService>(),
-    ProxyProvider<AuthService, ConsentPollingService>(),
+    ProxyProvider<AuthService, ConsentPollingService>(
+      dispose: (_, pollingService) => pollingService.dispose(),  // CRITICAL - prevents timer leaks
+    ),
     ChangeNotifierProxyProvider<AuthService, AccountProvider>(
-      // Also receives NotificationService
+      // Receives both AuthService AND NotificationService
+      create: (context) => AccountProvider(
+        context.read<AuthService>(),
+        context.read<NotificationService>(),
+      ),
     ),
     ChangeNotifierProxyProvider<AuthService, ProductProvider>(),
     ChangeNotifierProxyProvider<AuthService, TransferProvider>(),
@@ -265,10 +301,10 @@ MultiProvider(
 )
 ```
 
-**Provider Pattern Notes**:
-- `NotificationService` is a standalone `ChangeNotifierProvider`
-- Account, Product, and Transfer providers receive both `AuthService` and `NotificationService`
-- `ConsentPollingService` is disposed automatically when app closes
+**Why ChangeNotifierProxyProvider?**
+- Providers recreate only when AuthService changes
+- Reuses previous instance if auth unchanged (performance optimization)
+- Prevents unnecessary widget rebuilds
 
 ### UI Theme
 
@@ -340,11 +376,14 @@ When consents require manual approval:
 
 ## Important Notes
 
-- Always check consent approval before API calls
-- Handle token expiration (tokens valid for 24 hours)
-- Inter-bank transfers require `bank_code` in creditor account
-- PDF generation requires storage permissions on Android
-- Yandex Maps requires API key initialization
+- **Balance storage uses composite keys** (`'bankCode:accountId'`) to prevent collision
+- **Bank aggregation is sequential** (not parallel) - one failure doesn't break others
+- **Token lifetime: 24 hours** - auto-refreshed before each API call via `ensureValidToken()`
+- **Inter-bank transfers** require `bank_code` in creditor account
+- **PDF limits**: Max 10 accounts, 15 transactions per account (prevents crashes)
+- **Yandex Maps**: Requires API key initialization in `main.dart` before `runApp()`
+- **Asset changes**: Run `flutter clean && flutter pub get` to register new assets
+- **Consent polling**: Automatically detects bank-side approvals (10s intervals, 20 min max)
 
 ### SBank API Quirks (Critical!)
 - **Uses `request_id` not `consent_id`**: Extract with fallback chain: `consent_id` → `consentId` → `request_id`
@@ -364,11 +403,40 @@ When consents require manual approval:
 - The code handles both by checking: `consent_id` → `consentId` → `request_id`
 - The `request_id` is used for all subsequent status checks
 
+**Bank Response Format Variations**:
+```dart
+// Nested (VBank, ABank)
+{"data": {"consent_id": "cons-abc123", "status": "approved"}}
+
+// Flat (SBank sometimes)
+{"request_id": "req-4de5076a", "status": "pending"}
+
+// Code handles both with fallback parsing
+```
+
 ### API Retry Mechanism
 - All bank API calls use exponential backoff retry (3 attempts by default)
-- Initial delay: 2 seconds, doubles on each retry
-- Handles: SocketException, TimeoutException, HttpException
+- Initial delay: 2 seconds, doubles on each retry (2s → 4s → 8s)
+- **Retries**: SocketException, TimeoutException, HttpException
+- **No retry**: Parse errors, validation errors (fail fast)
 - 30-second timeout per request
+- Max total wait: ~14 seconds for 3 retries
+
+```dart
+// Retry behavior
+try {
+  return await operation().timeout(Duration(seconds: 30));
+} on SocketException {
+  // Retry with exponential backoff
+} on TimeoutException {
+  // Retry with exponential backoff
+} on HttpException {
+  // Retry with exponential backoff
+} catch (e) {
+  // Parse/validation errors - NO RETRY
+  rethrow;
+}
+```
 
 ## Troubleshooting
 
@@ -402,3 +470,16 @@ When consents require manual approval:
 
 ### Issue: Empty consent_id in response
 **Solution**: Check API response structure. The code handles both nested (`data.consent_id`) and flat (`consent_id`) structures. If consent_id is empty, the bank may not have returned it properly - check response body in logs.
+
+### Issue: Balances showing same value for different banks
+**Solution**: Check that composite key format is correct (`'bankCode:accountId'`). Verify `_getBalanceKey()` is used consistently. Check console logs for balance storage - keys should be like `'vbank:12345'` not just `'12345'`.
+
+### Issue: Assets not loading (e.g., atm_icon.png)
+**Solution**:
+1. Verify asset exists in `assets/` folder
+2. Check `pubspec.yaml` has `assets: - assets/` declared
+3. **Critical**: Run `flutter clean && flutter pub get` to register new assets
+4. Do full app restart (capital `R` in terminal, not hot reload)
+
+### Issue: Polling service not stopping/memory leak
+**Solution**: Ensure `ConsentPollingService` has `dispose()` called in provider setup. Check for `ProxyProvider` dispose callback in `main.dart`. Polling timer must be canceled on app exit.

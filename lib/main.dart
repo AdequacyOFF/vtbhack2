@@ -10,6 +10,7 @@ import 'services/notification_service.dart';
 import 'providers/account_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/transfer_provider.dart';
+import 'providers/news_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
@@ -73,6 +74,9 @@ class MyApp extends StatelessWidget {
             authService,
             context.read<NotificationService>(),
           ),
+        ),
+        ChangeNotifierProvider<NewsProvider>(
+          create: (_) => NewsProvider(),
         ),
       ],
       child: MaterialApp(

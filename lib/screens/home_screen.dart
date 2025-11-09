@@ -13,6 +13,7 @@ import 'transfer_screen.dart';
 import 'atm_map_screen.dart';
 import 'profile_screen.dart';
 import 'notifications_screen.dart'; // Добавьте этот импорт
+import 'news_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -212,6 +213,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       const ProductsScreen(),
       const TransferScreen(),
       const AtmMapScreen(),
+      const NewsScreen(), // News screen
       const NotificationsScreen(), // Новая страница уведомлений
       const ProfileScreen(),
     ];
@@ -250,6 +252,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           const BottomNavigationBarItem(
             icon: Icon(Icons.map),
             label: 'Банкоматы',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.article),
+            label: 'Новости',
           ),
           BottomNavigationBarItem(
             icon: _buildNotificationIcon(context), // Иконка с бейджем
