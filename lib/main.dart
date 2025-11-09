@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:yandex_mapkit/yandex_mapkit.dart';
+import 'package:yandex_maps_mapkit/init.dart' as yandex_init;
 
 import 'config/app_theme.dart';
 import 'config/api_config.dart';
 import 'services/auth_service.dart';
 import 'services/consent_polling_service.dart';
+import 'services/notification_service.dart';
 import 'providers/account_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/transfer_provider.dart';
@@ -15,8 +16,8 @@ import 'screens/home_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Yandex MapKit
-  AndroidYandexMap.useAndroidViewSurface = false;
+  // Initialize Yandex MapKit with API key
+  await yandex_init.initMapkit(apiKey: ApiConfig.yandexMapsApiKey);
 
   runApp(const MyApp());
 }
@@ -31,6 +32,9 @@ class MyApp extends StatelessWidget {
         Provider<AuthService>(
           create: (_) => AuthService(),
         ),
+        ChangeNotifierProvider<NotificationService>(
+          create: (_) => NotificationService(),
+        ),
         ProxyProvider<AuthService, ConsentPollingService>(
           create: (context) => ConsentPollingService(context.read<AuthService>()),
           update: (context, authService, previous) =>
@@ -38,19 +42,37 @@ class MyApp extends StatelessWidget {
           dispose: (_, pollingService) => pollingService.dispose(),
         ),
         ChangeNotifierProxyProvider<AuthService, AccountProvider>(
-          create: (context) => AccountProvider(context.read<AuthService>()),
+          create: (context) => AccountProvider(
+            context.read<AuthService>(),
+            context.read<NotificationService>(),
+          ),
           update: (context, authService, previous) =>
-              previous ?? AccountProvider(authService),
+          previous ?? AccountProvider(
+            authService,
+            context.read<NotificationService>(),
+          ),
         ),
         ChangeNotifierProxyProvider<AuthService, ProductProvider>(
-          create: (context) => ProductProvider(context.read<AuthService>()),
+          create: (context) => ProductProvider(
+            context.read<AuthService>(),
+            context.read<NotificationService>(),
+          ),
           update: (context, authService, previous) =>
-              previous ?? ProductProvider(authService),
+          previous ?? ProductProvider(
+            authService,
+            context.read<NotificationService>(),
+          ),
         ),
         ChangeNotifierProxyProvider<AuthService, TransferProvider>(
-          create: (context) => TransferProvider(context.read<AuthService>()),
+          create: (context) => TransferProvider(
+            context.read<AuthService>(),
+            context.read<NotificationService>(),
+          ),
           update: (context, authService, previous) =>
-              previous ?? TransferProvider(authService),
+          previous ?? TransferProvider(
+            authService,
+            context.read<NotificationService>(),
+          ),
         ),
       ],
       child: MaterialApp(

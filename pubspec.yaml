@@ -45,7 +45,7 @@ dependencies:
   shared_preferences: ^2.2.2
 
   # Maps
-  yandex_mapkit: ^4.1.0
+  yandex_maps_mapkit: 4.25.0-beta
   geolocator: ^11.0.0
   permission_handler: ^11.2.0
 

@@ -4,6 +4,7 @@ import '../providers/account_provider.dart';
 import '../providers/product_provider.dart';
 import '../services/auth_service.dart';
 import '../services/consent_polling_service.dart';
+import '../services/notification_service.dart'; // Добавьте этот импорт
 import '../config/app_theme.dart';
 import '../config/api_config.dart';
 import 'accounts_screen.dart';
@@ -11,6 +12,7 @@ import 'products_screen.dart';
 import 'transfer_screen.dart';
 import 'atm_map_screen.dart';
 import 'profile_screen.dart';
+import 'notifications_screen.dart'; // Добавьте этот импорт
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -115,6 +117,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final authService = context.read<AuthService>();
     final accountProvider = context.read<AccountProvider>();
     final productProvider = context.read<ProductProvider>();
+    final notificationService = context.read<NotificationService>();
     final pollingService = context.read<ConsentPollingService>();
 
     try {
@@ -166,6 +169,42 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     setState(() => _isInitialized = true);
   }
 
+  // ДОБАВЬТЕ ЭТОТ МЕТОД - он должен быть внутри класса _HomeScreenState
+  Widget _buildNotificationIcon(BuildContext context) {
+    final unreadCount = context.watch<NotificationService>().unreadCount;
+
+    return Stack(
+      children: [
+        const Icon(Icons.notifications),
+        if (unreadCount > 0)
+          Positioned(
+            right: 0,
+            top: 0,
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: const BoxDecoration(
+                color: Colors.red,
+                shape: BoxShape.circle,
+              ),
+              constraints: const BoxConstraints(
+                minWidth: 16,
+                minHeight: 16,
+              ),
+              child: Text(
+                unreadCount > 9 ? '9+' : unreadCount.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final screens = [
@@ -173,6 +212,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       const ProductsScreen(),
       const TransferScreen(),
       const AtmMapScreen(),
+      const NotificationsScreen(), // Новая страница уведомлений
       const ProfileScreen(),
     ];
 
@@ -194,24 +234,28 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         onTap: (index) => setState(() => _selectedIndex = index),
         type: BottomNavigationBarType.fixed,
         selectedItemColor: AppTheme.primaryBlue,
-        items: const [
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.home),
             label: 'Главная',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.shopping_bag),
             label: 'Продукты',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.swap_horiz),
             label: 'Переводы',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.map),
             label: 'Банкоматы',
           ),
           BottomNavigationBarItem(
+            icon: _buildNotificationIcon(context), // Иконка с бейджем
+            label: 'Уведомления',
+          ),
+          const BottomNavigationBarItem(
             icon: Icon(Icons.person),
             label: 'Профиль',
           ),
