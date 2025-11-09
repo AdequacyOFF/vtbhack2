@@ -211,6 +211,10 @@ flutter build appbundle
 3. ATM locations are hardcoded for demonstration
 4. Limited to 3 partner banks
 
+## News Aggregator
+Submodule that helps us build presonalized news based on transaction histroy  
+Repo: [news-aggregator](https://github.com/AdequacyOFF/news-aggregator.git)
+
 ## Future Enhancements
 
 - Real-time notifications for transactions
