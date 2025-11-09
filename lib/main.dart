@@ -5,6 +5,7 @@ import 'package:yandex_maps_mapkit/init.dart' as yandex_init;
 import 'config/app_theme.dart';
 import 'config/api_config.dart';
 import 'services/auth_service.dart';
+import 'services/consent_polling_service.dart';
 import 'services/notification_service.dart';
 import 'providers/account_provider.dart';
 import 'providers/product_provider.dart';
@@ -33,6 +34,12 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<NotificationService>(
           create: (_) => NotificationService(),
+        ),
+        ProxyProvider<AuthService, ConsentPollingService>(
+          create: (context) => ConsentPollingService(context.read<AuthService>()),
+          update: (context, authService, previous) =>
+              previous ?? ConsentPollingService(authService),
+          dispose: (_, pollingService) => pollingService.dispose(),
         ),
         ChangeNotifierProxyProvider<AuthService, AccountProvider>(
           create: (context) => AccountProvider(

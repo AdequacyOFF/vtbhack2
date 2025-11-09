@@ -5,7 +5,7 @@ A comprehensive Flutter mobile application for VTB Hack 2025 that aggregates ban
 ## Features
 
 ### 1. Multi-Bank Account Aggregation
-- Connects to **3 banks**: VTB Bank (VirtualBank), T-Bank (AwesomeBank), and Sberbank (SmartBank)
+- Connects to **3 banks**: VBank, ABank, and SBank
 - Displays all accounts from all banks in a unified dashboard
 - Real-time balance updates
 - Transaction history for each account
@@ -35,9 +35,9 @@ A comprehensive Flutter mobile application for VTB Hack 2025 that aggregates ban
 ### 5. ATM Locator
 - Integrated Yandex Maps showing all partner bank ATMs
 - Real-time location display for:
-  - VTB Bank (VirtualBank) locations
-  - T-Bank (AwesomeBank) locations
-  - Sberbank (SmartBank) locations
+  - VBank locations
+  - ABank locations
+  - SBank locations
 
 ### 6. Account Statement Generation
 - Generate comprehensive PDF statements

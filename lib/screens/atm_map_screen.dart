@@ -8,17 +8,17 @@ import '../config/api_config.dart';
 
 // ATM locations for demonstration (Moscow area)
 final Map<String, List<Point>> atmLocations = {
-  'vbank': [ // VTB
+  'vbank': [ // VBank
     const Point(latitude: 55.7558, longitude: 37.6173), // Red Square area
     const Point(latitude: 55.7522, longitude: 37.6156),
     const Point(latitude: 55.7514, longitude: 37.6198),
   ],
-  'abank': [ // T-Bank
+  'abank': [ // ABank
     const Point(latitude: 55.7540, longitude: 37.6210),
     const Point(latitude: 55.7500, longitude: 37.6180),
     const Point(latitude: 55.7560, longitude: 37.6150),
   ],
-  'sbank': [ // Sberbank
+  'sbank': [ // SBank
     const Point(latitude: 55.7530, longitude: 37.6190),
     const Point(latitude: 55.7510, longitude: 37.6170),
     const Point(latitude: 55.7545, longitude: 37.6200),

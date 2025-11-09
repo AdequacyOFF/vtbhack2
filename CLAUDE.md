@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Multi-Bank Aggregation App** - A Flutter application that aggregates accounts from multiple banking services (VTB Bank, T-Bank, Sberbank) through OpenBanking APIs. Built for VTB Hack 2025.
+**Multi-Bank Aggregation App** - A Flutter application that aggregates accounts from multiple banking services (VBank, ABank, SBank) through OpenBanking APIs. Built for VTB Hack 2025.
 
 ### Key Features
 1. Multi-bank account aggregation across 3 banks
@@ -53,6 +53,15 @@ The app uses credentials from `lib/config/api_config.dart`:
   - ABank: https://abank.open.bankingapi.ru
   - SBank: https://sbank.open.bankingapi.ru
 
+### Linting & Analysis
+```bash
+# Analyze code for issues
+flutter analyze
+
+# Check for outdated packages
+flutter pub outdated
+```
+
 ### Testing
 ```bash
 # Run all tests
@@ -60,12 +69,18 @@ flutter test
 
 # Run with coverage
 flutter test --coverage
+
+# Run a single test file
+flutter test test/widget_test.dart
 ```
 
 ### Building
 ```bash
-# Build Android APK
+# Build Android APK (debug)
 flutter build apk
+
+# Build Android APK (release)
+flutter build apk --release
 
 # Build Android App Bundle
 flutter build appbundle
@@ -175,6 +190,24 @@ notificationService.addNotification(
 
 // Check unread count (displayed in UI badge)
 final unreadCount = notificationService.unreadCount;
+```
+
+Consent refresh methods in `AuthService`:
+```dart
+// Refresh single consent type for a bank
+await authService.refreshAccountConsentStatus('sbank');
+await authService.refreshPaymentConsentStatus('sbank');
+await authService.refreshProductConsentStatus('sbank');
+
+// Refresh all consents for a specific bank
+await authService.refreshAllConsentsForBank('sbank');
+
+// Refresh all consents for all banks
+await authService.refreshAllConsents();
+
+// Check consent status
+final hasPending = authService.hasPendingConsents;
+final pendingBanks = authService.banksWithPendingConsents;
 ```
 
 ### Banking API Integration
@@ -297,6 +330,14 @@ notificationService.addNotification(
 );
 ```
 
+### Handling Pending Consents (SBank)
+When consents require manual approval:
+1. Consent is created with status `pending` or `awaiting_authorization`
+2. User must visit bank website to approve consent
+3. After bank-side approval, use `refreshAccountConsentStatus(bankCode)` to update local status
+4. Check `authService.hasPendingConsents` to detect banks needing approval
+5. Get list with `authService.banksWithPendingConsents`
+
 ## Important Notes
 
 - Always check consent approval before API calls
@@ -309,6 +350,25 @@ notificationService.addNotification(
 - **Uses `request_id` not `consent_id`**: Extract with fallback chain: `consent_id` → `consentId` → `request_id`
 - **Status check header**: Must send `x-fapi-interaction-id: team201` (base team ID, not `team201-10`)
 - **Code handles this automatically**: Extracts base ID from full client ID before API calls
+
+### Consent Status Management
+- Approved consent states: `approved` or `active`
+- Pending consent states: `pending` or `awaiting_authorization`
+- Use `refreshAccountConsentStatus(bankCode)` to poll consent status from bank
+- SBank requires manual approval - poll status after user approves on bank website
+- Consent IDs are extracted from both flat and nested response structures
+
+**Important: SBank uses `request_id` instead of `consent_id`**
+- SBank returns `request_id` field (e.g., "req-4de5076a2382") in consent creation responses
+- Other banks (VBank, ABank) return `consent_id`
+- The code handles both by checking: `consent_id` → `consentId` → `request_id`
+- The `request_id` is used for all subsequent status checks
+
+### API Retry Mechanism
+- All bank API calls use exponential backoff retry (3 attempts by default)
+- Initial delay: 2 seconds, doubles on each retry
+- Handles: SocketException, TimeoutException, HttpException
+- 30-second timeout per request
 
 ## Troubleshooting
 
@@ -336,3 +396,9 @@ notificationService.addNotification(
 2. Verify consent was approved on bank website
 3. Ensure polling service is started (check for `Starting polling for banks`)
 4. Manual trigger: Use "Check Status" button in Consent Management screen
+
+### Issue: Consent approved on bank website but app shows "pending"
+**Solution**: The app needs to poll the bank API to refresh consent status. Call `authService.refreshAccountConsentStatus(bankCode)` or `authService.refreshAllConsentsForBank(bankCode)` after user approves on bank website. Consider implementing periodic polling or a manual "Refresh" button in the UI.
+
+### Issue: Empty consent_id in response
+**Solution**: Check API response structure. The code handles both nested (`data.consent_id`) and flat (`consent_id`) structures. If consent_id is empty, the bank may not have returned it properly - check response body in logs.

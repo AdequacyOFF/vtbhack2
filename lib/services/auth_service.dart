@@ -276,8 +276,15 @@ class AuthService {
 
   /// Check if bank has all required consents
   bool hasRequiredConsents(String bankCode) {
-    return _accountConsents.containsKey(bankCode) &&
-        _accountConsents[bankCode]!.isApproved;
+    final hasConsent = _accountConsents.containsKey(bankCode);
+    final isApproved = hasConsent && _accountConsents[bankCode]!.isApproved;
+
+    print('[AuthService] hasRequiredConsents($bankCode): hasConsent=$hasConsent, isApproved=$isApproved');
+    if (hasConsent) {
+      print('[AuthService] Consent status for $bankCode: ${_accountConsents[bankCode]!.status}');
+    }
+
+    return hasConsent && isApproved;
   }
 
   /// Auto-create missing consents for all banks
@@ -319,6 +326,191 @@ class AuthService {
       }
     }
     return false;
+  }
+
+  /// Get list of banks with pending consents
+  List<String> get banksWithPendingConsents {
+    final pending = <String>[];
+    for (final bankCode in supportedBanks) {
+      if (_accountConsents.containsKey(bankCode) &&
+          _accountConsents[bankCode]!.isPending) {
+        pending.add(bankCode);
+      }
+    }
+    return pending;
+  }
+
+  /// Check if any consents are pending approval
+  bool get hasPendingConsents {
+    return banksWithPendingConsents.isNotEmpty;
+  }
+
+  /// Refresh account consent status from bank
+  Future<AccountConsent?> refreshAccountConsentStatus(String bankCode) async {
+    try {
+      print('[AuthService] Refreshing account consent for $bankCode');
+
+      // Check if we have a consent ID stored
+      if (!_accountConsents.containsKey(bankCode)) {
+        print('[AuthService] No stored consent found for $bankCode');
+        return null;
+      }
+
+      // Get client ID
+      final clientId = await getClientId();
+      if (clientId == null || clientId.isEmpty) {
+        print('[AuthService] ERROR: Client ID is not set!');
+        throw Exception('Client ID is not set. Cannot check consent status.');
+      }
+
+      final storedConsent = _accountConsents[bankCode]!;
+      print('[AuthService] Stored consent ID: "${storedConsent.consentId}", Status: ${storedConsent.status}');
+
+      // Validate consent ID is not empty
+      if (storedConsent.consentId.isEmpty) {
+        print('[AuthService] ERROR: Consent ID is empty for $bankCode! Cannot check status.');
+        throw Exception('Consent ID is empty for $bankCode. Consent may not have been created properly.');
+      }
+
+      final service = getBankService(bankCode);
+
+      // Fetch current status from bank
+      print('[AuthService] Fetching current status from $bankCode with consent ID: ${storedConsent.consentId}');
+      final updatedConsent = await service.getAccountConsentStatus(storedConsent.consentId, clientId);
+
+      print('[AuthService] Received updated status: ${updatedConsent.status}');
+
+      // Update stored consent
+      _accountConsents[bankCode] = updatedConsent;
+      await saveConsents();
+
+      print('[AuthService] Consent status updated and saved for $bankCode');
+
+      return updatedConsent;
+    } catch (e) {
+      print('[AuthService] Error refreshing consent for $bankCode: $e');
+      throw Exception('Failed to refresh account consent status for $bankCode: $e');
+    }
+  }
+
+  /// Refresh payment consent status from bank
+  Future<PaymentConsent?> refreshPaymentConsentStatus(String bankCode) async {
+    try {
+      // Check if we have a consent ID stored
+      if (!_paymentConsents.containsKey(bankCode)) {
+        return null;
+      }
+
+      // Get client ID
+      final clientId = await getClientId();
+      if (clientId == null || clientId.isEmpty) {
+        throw Exception('Client ID is not set. Cannot check consent status.');
+      }
+
+      final storedConsent = _paymentConsents[bankCode]!;
+      final service = getBankService(bankCode);
+
+      // Fetch current status from bank
+      final updatedConsent = await service.getPaymentConsentStatus(storedConsent.consentId, clientId);
+
+      // Update stored consent
+      _paymentConsents[bankCode] = updatedConsent;
+      await saveConsents();
+
+      return updatedConsent;
+    } catch (e) {
+      throw Exception('Failed to refresh payment consent status for $bankCode: $e');
+    }
+  }
+
+  /// Refresh product consent status from bank
+  Future<ProductAgreementConsent?> refreshProductConsentStatus(String bankCode) async {
+    try {
+      // Check if we have a consent ID stored
+      if (!_productConsents.containsKey(bankCode)) {
+        return null;
+      }
+
+      // Get client ID
+      final clientId = await getClientId();
+      if (clientId == null || clientId.isEmpty) {
+        throw Exception('Client ID is not set. Cannot check consent status.');
+      }
+
+      final storedConsent = _productConsents[bankCode]!;
+      final service = getBankService(bankCode);
+
+      // Fetch current status from bank
+      final updatedConsent = await service.getProductConsentStatus(storedConsent.consentId, clientId);
+
+      // Update stored consent
+      _productConsents[bankCode] = updatedConsent;
+      await saveConsents();
+
+      return updatedConsent;
+    } catch (e) {
+      throw Exception('Failed to refresh product consent status for $bankCode: $e');
+    }
+  }
+
+  /// Refresh all consent statuses for a specific bank
+  Future<Map<String, dynamic>> refreshAllConsentsForBank(String bankCode) async {
+    print('[AuthService] ===== Starting refresh for $bankCode =====');
+    final results = <String, dynamic>{};
+
+    // Refresh account consent
+    try {
+      print('[AuthService] Refreshing account consent...');
+      final accountConsent = await refreshAccountConsentStatus(bankCode);
+      results['account_consent'] = accountConsent != null ? 'refreshed' : 'not_found';
+      print('[AuthService] Account consent result: ${results["account_consent"]}');
+    } catch (e) {
+      results['account_consent'] = 'error: $e';
+      print('[AuthService] Account consent error: $e');
+    }
+
+    // Refresh payment consent
+    try {
+      print('[AuthService] Refreshing payment consent...');
+      final paymentConsent = await refreshPaymentConsentStatus(bankCode);
+      results['payment_consent'] = paymentConsent != null ? 'refreshed' : 'not_found';
+      print('[AuthService] Payment consent result: ${results["payment_consent"]}');
+    } catch (e) {
+      results['payment_consent'] = 'error: $e';
+      print('[AuthService] Payment consent error: $e');
+    }
+
+    // Refresh product consent
+    try {
+      print('[AuthService] Refreshing product consent...');
+      final productConsent = await refreshProductConsentStatus(bankCode);
+      results['product_consent'] = productConsent != null ? 'refreshed' : 'not_found';
+      print('[AuthService] Product consent result: ${results["product_consent"]}');
+    } catch (e) {
+      results['product_consent'] = 'error: $e';
+      print('[AuthService] Product consent error: $e');
+    }
+
+    print('[AuthService] ===== Refresh complete for $bankCode =====');
+    print('[AuthService] Results: $results');
+
+    return results;
+  }
+
+  /// Refresh all consents for all banks
+  Future<Map<String, bool>> refreshAllConsents() async {
+    final results = <String, bool>{};
+
+    for (final bankCode in supportedBanks) {
+      try {
+        await refreshAllConsentsForBank(bankCode);
+        results[bankCode] = true;
+      } catch (e) {
+        results[bankCode] = false;
+      }
+    }
+
+    return results;
   }
 
   Future<void> initialize() async {

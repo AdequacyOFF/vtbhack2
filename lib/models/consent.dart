@@ -33,7 +33,7 @@ class AccountConsent {
     };
   }
 
-  bool get isApproved => status == 'approved';
+  bool get isApproved => status == 'approved' || status == 'active';
   bool get isPending => status == 'pending' || status == 'awaiting_authorization';
 }
 
@@ -73,7 +73,7 @@ class PaymentConsent {
     };
   }
 
-  bool get isApproved => status == 'approved';
+  bool get isApproved => status == 'approved' || status == 'active';
 }
 
 class ProductAgreementConsent {
@@ -109,6 +109,6 @@ class ProductAgreementConsent {
     };
   }
 
-  bool get isApproved => status == 'approved';
+  bool get isApproved => status == 'approved' || status == 'active';
 }
 
