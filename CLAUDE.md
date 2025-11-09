@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Multi-Bank Aggregation App** - A Flutter application that aggregates accounts from multiple banking services (VTB Bank, T-Bank, Sberbank) through OpenBanking APIs. Built for VTB Hack 2025.
+**Multi-Bank Aggregation App** - A Flutter application that aggregates accounts from multiple banking services (VBank, ABank, SBank) through OpenBanking APIs. Built for VTB Hack 2025.
 
 ### Key Features
 1. Multi-bank account aggregation across 3 banks

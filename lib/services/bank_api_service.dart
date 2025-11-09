@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import '../config/api_config.dart';
 import '../models/bank_token.dart';
@@ -15,19 +17,81 @@ class BankApiService {
 
   String get baseUrl => ApiConfig.getBankBaseUrl(bankCode);
 
+  // Helper to check if status is approved/active
+  bool _isStatusApproved(String? status) {
+    return status == 'approved' || status == 'active';
+  }
+
+  // Helper method for executing HTTP requests with retry mechanism
+  Future<T> _executeWithRetry<T>(
+    Future<T> Function() operation, {
+    int maxRetries = 3,
+    Duration initialDelay = const Duration(seconds: 2),
+  }) async {
+    int attempt = 0;
+    Duration delay = initialDelay;
+
+    while (attempt < maxRetries) {
+      try {
+        print('[$bankCode] Attempt ${attempt + 1}/$maxRetries');
+        return await operation().timeout(
+          const Duration(seconds: 30),
+          onTimeout: () {
+            throw TimeoutException('Превышено время ожидания ответа от $bankCode');
+          },
+        );
+      } on SocketException catch (e) {
+        attempt++;
+        if (attempt >= maxRetries) {
+          print('[$bankCode] Не удалось подключиться после $maxRetries попыток');
+          throw Exception('Не удалось подключиться к $bankCode: ${e.message}. Проверьте подключение к интернету.');
+        }
+        print('[$bankCode] Ошибка сокета: ${e.message}. Повтор через ${delay.inSeconds}с...');
+        await Future.delayed(delay);
+        delay *= 2; // Exponential backoff
+      } on TimeoutException catch (e) {
+        attempt++;
+        if (attempt >= maxRetries) {
+          print('[$bankCode] Превышено время ожидания после $maxRetries попыток');
+          throw Exception('Превышено время ожидания ответа от $bankCode: ${e.message}');
+        }
+        print('[$bankCode] Тайм-аут: ${e.message}. Повтор через ${delay.inSeconds}с...');
+        await Future.delayed(delay);
+        delay *= 2;
+      } on HttpException catch (e) {
+        attempt++;
+        if (attempt >= maxRetries) {
+          print('[$bankCode] Ошибка HTTP после $maxRetries попыток');
+          throw Exception('Ошибка HTTP для $bankCode: ${e.message}');
+        }
+        print('[$bankCode] HTTP ошибка: ${e.message}. Повтор через ${delay.inSeconds}с...');
+        await Future.delayed(delay);
+        delay *= 2;
+      } catch (e) {
+        // For other errors, don't retry
+        print('[$bankCode] Неожиданная ошибка: $e');
+        rethrow;
+      }
+    }
+
+    throw Exception('Не удалось выполнить операцию для $bankCode после $maxRetries попыток');
+  }
+
   // Authentication
   Future<BankToken> getBankToken() async {
-    final response = await http.post(
-      Uri.parse('$baseUrl/auth/bank-token?client_id=${ApiConfig.clientId}&client_secret=${ApiConfig.clientSecret}'),
-    );
+    return await _executeWithRetry(() async {
+      final response = await http.post(
+        Uri.parse('$baseUrl/auth/bank-token?client_id=${ApiConfig.clientId}&client_secret=${ApiConfig.clientSecret}'),
+      );
 
-    if (response.statusCode == 200) {
-      final json = jsonDecode(response.body);
-      _token = BankToken.fromJson(json, bankCode);
-      return _token!;
-    } else {
-      throw Exception('Failed to get bank token: ${response.body}');
-    }
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        _token = BankToken.fromJson(json, bankCode);
+        return _token!;
+      } else {
+        throw Exception('Failed to get bank token: ${response.body}');
+      }
+    });
   }
 
   Future<BankToken> ensureValidToken() async {
@@ -58,23 +122,82 @@ class BankApiService {
       ],
       'reason': 'Агрегация счетов для мультибанк-приложения',
       'requesting_bank': ApiConfig.clientId,
-      'requesting_bank_name': 'VTB Hack App',
+      'requesting_bank_name': 'Multi-Bank App',
     };
 
-    final response = await http.post(
-      Uri.parse('$baseUrl/account-consents/request'),
-      headers: {
-        ..._authHeaders(token),
-        'x-requesting-bank': ApiConfig.clientId,
-      },
-      body: jsonEncode(body),
-    );
+    print('[$bankCode] Creating account consent for client: $clientId');
+    print('[$bankCode] Request URL: $baseUrl/account-consents/request');
+    print('[$bankCode] Request body: ${jsonEncode(body)}');
 
-    if (response.statusCode == 200) {
-      return AccountConsent.fromJson(jsonDecode(response.body), bankCode);
-    } else {
-      throw Exception('Failed to create account consent: ${response.body}');
-    }
+    return await _executeWithRetry(() async {
+      final response = await http.post(
+        Uri.parse('$baseUrl/account-consents/request'),
+        headers: {
+          ..._authHeaders(token),
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+        body: jsonEncode(body),
+      );
+
+      print('[$bankCode] Response status: ${response.statusCode}');
+      print('[$bankCode] Response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        try {
+          final json = jsonDecode(response.body);
+          print('[$bankCode] Parsing JSON response, top-level keys: ${json.keys.toList()}');
+
+          // Try to extract consent ID from various possible locations
+          // Priority: consent_id (underscore) > consentId (camelCase) > data.consent_id > data.consentId
+          String consentId = '';
+          String status = 'pending';
+          String createdAt = DateTime.now().toIso8601String();
+
+          // Check if response has 'data' field (nested structure)
+          if (json is Map && json.containsKey('data') && json['data'] != null) {
+            print('[$bankCode] Response has "data" wrapper (nested structure)');
+            final data = json['data'];
+
+            // Try consent_id first (with underscore), then consentId (camelCase)
+            consentId = data['consent_id'] ?? data['consentId'] ?? '';
+            status = data['status'] ?? 'pending';
+            createdAt = data['creationDateTime'] ?? data['creation_date_time'] ?? data['created_at'] ?? DateTime.now().toIso8601String();
+
+            print('[$bankCode] Extracted from data: consent_id="$consentId", status="$status"');
+          } else {
+            // Flat structure (no 'data' wrapper) - this is what SBank uses
+            print('[$bankCode] Flat response structure (no "data" wrapper) - SBank format');
+
+            // Try consent_id first (with underscore), then consentId (camelCase)
+            consentId = json['consent_id'] ?? json['consentId'] ?? '';
+            status = json['status'] ?? 'pending';
+            createdAt = json['creationDateTime'] ?? json['creation_date_time'] ?? json['created_at'] ?? DateTime.now().toIso8601String();
+
+            print('[$bankCode] Extracted directly: consent_id="$consentId", status="$status"');
+          }
+
+          if (consentId.isEmpty) {
+            print('[$bankCode] ERROR: Consent ID is empty! Full response: ${response.body}');
+            throw Exception('Failed to extract consent_id from response. Keys available: ${json.keys.toList()}');
+          }
+
+          // Convert to our internal format
+          final consentData = {
+            'consent_id': consentId,
+            'status': status,
+            'created_at': createdAt,
+            'auto_approved': _isStatusApproved(status),
+          };
+
+          print('[$bankCode] Final consent data: $consentData');
+          return AccountConsent.fromJson(consentData, bankCode);
+        } catch (e) {
+          throw Exception('Failed to parse account consent response from $bankCode. Response: ${response.body}. Error: $e');
+        }
+      } else {
+        throw Exception('Failed to create account consent for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
   }
 
   Future<PaymentConsent> createPaymentConsent(String clientId, String debtorAccount) async {
@@ -101,9 +224,43 @@ class BankApiService {
     );
 
     if (response.statusCode == 200) {
-      return PaymentConsent.fromJson(jsonDecode(response.body), bankCode);
+      try {
+        final json = jsonDecode(response.body);
+
+        // Try to extract from various possible locations (prioritize underscore format)
+        String consentId = '';
+        String status = 'pending';
+        String consentType = 'vrp';
+
+        if (json is Map && json.containsKey('data') && json['data'] != null) {
+          final data = json['data'];
+          consentId = data['consent_id'] ?? data['consentId'] ?? '';
+          status = data['status'] ?? 'pending';
+          consentType = data['consent_type'] ?? data['consentType'] ?? 'vrp';
+        } else {
+          // Flat structure - prioritize underscore format
+          consentId = json['consent_id'] ?? json['consentId'] ?? '';
+          status = json['status'] ?? 'pending';
+          consentType = json['consent_type'] ?? json['consentType'] ?? 'vrp';
+        }
+
+        if (consentId.isEmpty) {
+          print('[$bankCode] ERROR: Payment consent ID is empty! Response: ${response.body}');
+        }
+
+        final consentData = {
+          'consent_id': consentId,
+          'status': status,
+          'consent_type': consentType,
+          'auto_approved': _isStatusApproved(status),
+        };
+
+        return PaymentConsent.fromJson(consentData, bankCode);
+      } catch (e) {
+        throw Exception('Failed to parse payment consent response from $bankCode. Response: ${response.body}. Error: $e');
+      }
     } else {
-      throw Exception('Failed to create payment consent: ${response.body}');
+      throw Exception('Failed to create payment consent for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
     }
   }
 
@@ -129,10 +286,209 @@ class BankApiService {
     );
 
     if (response.statusCode == 200) {
-      return ProductAgreementConsent.fromJson(jsonDecode(response.body), bankCode);
+      try {
+        final json = jsonDecode(response.body);
+
+        // Try to extract from various possible locations (prioritize underscore format)
+        String consentId = '';
+        String status = 'pending';
+
+        if (json is Map && json.containsKey('data') && json['data'] != null) {
+          final data = json['data'];
+          consentId = data['consent_id'] ?? data['consentId'] ?? '';
+          status = data['status'] ?? 'pending';
+        } else {
+          // Flat structure - prioritize underscore format
+          consentId = json['consent_id'] ?? json['consentId'] ?? '';
+          status = json['status'] ?? 'pending';
+        }
+
+        if (consentId.isEmpty) {
+          print('[$bankCode] ERROR: Product consent ID is empty! Response: ${response.body}');
+        }
+
+        final consentData = {
+          'consent_id': consentId,
+          'status': status,
+          'auto_approved': _isStatusApproved(status),
+        };
+
+        return ProductAgreementConsent.fromJson(consentData, bankCode);
+      } catch (e) {
+        throw Exception('Failed to parse product consent response from $bankCode. Response: ${response.body}. Error: $e');
+      }
     } else {
-      throw Exception('Failed to create product agreement consent: ${response.body}');
+      throw Exception('Failed to create product agreement consent for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
     }
+  }
+
+  // Get consent status from bank
+  Future<AccountConsent> getAccountConsentStatus(String consentId, String clientId) async {
+    print('[$bankCode] Checking account consent status for ID: "$consentId"');
+    print('[$bankCode] Client ID for header: "$clientId"');
+
+    // Validate consent ID is not empty
+    if (consentId.isEmpty) {
+      throw Exception('[$bankCode] Cannot check consent status: consent ID is empty!');
+    }
+
+    final url = '$baseUrl/account-consents/$consentId';
+    print('[$bankCode] Request URL: $url');
+
+    return await _executeWithRetry(() async {
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {
+          'accept': 'application/json',
+          'x-fapi-interaction-id': clientId,
+        },
+      );
+
+      print('[$bankCode] Request headers: {accept: application/json, x-fapi-interaction-id: $clientId}');
+      print('[$bankCode] Status check response code: ${response.statusCode}');
+      print('[$bankCode] Status check response body: ${response.body}');
+
+      if (response.statusCode == 200) {
+        try {
+          final json = jsonDecode(response.body);
+
+          // Check if response has 'data' field
+          if (json is Map && json.containsKey('data') && json['data'] != null) {
+            final data = json['data'];
+
+            // Convert API response format to our internal format
+            final consentData = {
+              'consent_id': data['consentId'] ?? data['consent_id'] ?? consentId,
+              'status': data['status'] ?? 'pending',
+              'created_at': data['creationDateTime'] ?? data['creation_date_time'] ?? DateTime.now().toIso8601String(),
+              'auto_approved': _isStatusApproved(data['status']),
+            };
+
+            print('[$bankCode] Parsed consent status: ${consentData["status"]} (approved: ${consentData["auto_approved"]})');
+            return AccountConsent.fromJson(consentData, bankCode);
+          } else {
+            // If no 'data' field, try to parse directly
+            final consentData = {
+              'consent_id': json['consentId'] ?? json['consent_id'] ?? consentId,
+              'status': json['status'] ?? 'pending',
+              'created_at': json['creationDateTime'] ?? json['creation_date_time'] ?? DateTime.now().toIso8601String(),
+              'auto_approved': _isStatusApproved(json['status']),
+            };
+
+            print('[$bankCode] Parsed consent status (direct): ${consentData["status"]}');
+            return AccountConsent.fromJson(consentData, bankCode);
+          }
+        } catch (e) {
+          print('[$bankCode] Error parsing consent status response: $e');
+          throw Exception('Failed to parse account consent status from $bankCode. Response: ${response.body}. Error: $e');
+        }
+      } else {
+        print('[$bankCode] Failed to get consent status. Status code: ${response.statusCode}');
+        throw Exception('Failed to get account consent status for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<PaymentConsent> getPaymentConsentStatus(String consentId, String clientId) async {
+    print('[$bankCode] Checking payment consent status for ID: $consentId');
+    print('[$bankCode] Client ID for header: "$clientId"');
+
+    return await _executeWithRetry(() async {
+      final response = await http.get(
+        Uri.parse('$baseUrl/payment-consents/$consentId'),
+        headers: {
+          'accept': 'application/json',
+          'x-fapi-interaction-id': clientId,
+        },
+      );
+
+      print('[$bankCode] Payment status check response code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        try {
+          final json = jsonDecode(response.body);
+
+          // Check if response has 'data' field
+          if (json is Map && json.containsKey('data') && json['data'] != null) {
+            final data = json['data'];
+
+            // Convert API response format to our internal format
+            final consentData = {
+              'consent_id': data['consentId'] ?? data['consent_id'] ?? consentId,
+              'status': data['status'] ?? 'pending',
+              'consent_type': data['consentType'] ?? data['consent_type'] ?? 'vrp',
+              'auto_approved': _isStatusApproved(data['status']),
+            };
+
+            return PaymentConsent.fromJson(consentData, bankCode);
+          } else {
+            // If no 'data' field, try to parse directly
+            final consentData = {
+              'consent_id': json['consentId'] ?? json['consent_id'] ?? consentId,
+              'status': json['status'] ?? 'pending',
+              'consent_type': json['consentType'] ?? json['consent_type'] ?? 'vrp',
+              'auto_approved': _isStatusApproved(json['status']),
+            };
+
+            return PaymentConsent.fromJson(consentData, bankCode);
+          }
+        } catch (e) {
+          throw Exception('Failed to parse payment consent status from $bankCode. Response: ${response.body}. Error: $e');
+        }
+      } else {
+        throw Exception('Failed to get payment consent status for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<ProductAgreementConsent> getProductConsentStatus(String consentId, String clientId) async {
+    print('[$bankCode] Checking product consent status for ID: $consentId');
+    print('[$bankCode] Client ID for header: "$clientId"');
+
+    return await _executeWithRetry(() async {
+      final response = await http.get(
+        Uri.parse('$baseUrl/product-agreement-consents/$consentId'),
+        headers: {
+          'accept': 'application/json',
+          'x-fapi-interaction-id': clientId,
+        },
+      );
+
+      print('[$bankCode] Product status check response code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        try {
+          final json = jsonDecode(response.body);
+
+          // Check if response has 'data' field
+          if (json is Map && json.containsKey('data') && json['data'] != null) {
+            final data = json['data'];
+
+            // Convert API response format to our internal format
+            final consentData = {
+              'consent_id': data['consentId'] ?? data['consent_id'] ?? consentId,
+              'status': data['status'] ?? 'pending',
+              'auto_approved': _isStatusApproved(data['status']),
+            };
+
+            return ProductAgreementConsent.fromJson(consentData, bankCode);
+          } else {
+            // If no 'data' field, try to parse directly
+            final consentData = {
+              'consent_id': json['consentId'] ?? json['consent_id'] ?? consentId,
+              'status': json['status'] ?? 'pending',
+              'auto_approved': _isStatusApproved(json['status']),
+            };
+
+            return ProductAgreementConsent.fromJson(consentData, bankCode);
+          }
+        } catch (e) {
+          throw Exception('Failed to parse product consent status from $bankCode. Response: ${response.body}. Error: $e');
+        }
+      } else {
+        throw Exception('Failed to get product consent status for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
   }
 
   // Accounts

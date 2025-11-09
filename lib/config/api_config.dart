@@ -18,9 +18,9 @@ class ApiConfig {
 
   // Bank display names
   static const Map<String, String> bankNames = {
-    'vbank': 'VTB Bank',
-    'abank': 'T-Bank',
-    'sbank': 'Сбербанк',
+    'vbank': 'VBank',
+    'abank': 'ABank',
+    'sbank': 'SBank',
   };
 
   // Bank consent auto-approval
