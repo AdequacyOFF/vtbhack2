@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/account_provider.dart';
 import '../providers/product_provider.dart';
+import '../providers/news_provider.dart';
 import '../services/auth_service.dart';
 import '../services/consent_polling_service.dart';
 import '../services/notification_service.dart'; // Добавьте этот импорт
@@ -122,8 +123,13 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final pollingService = context.read<ConsentPollingService>();
 
     try {
-      // Auto-create missing consents on first load
+      // Log current consent state
+      debugPrint('[HomeScreen] _initialize called');
+      debugPrint('[HomeScreen] hasMissingConsents: ${authService.hasMissingConsents}');
+
+      // Auto-create missing consents ONLY if they don't exist at all
       if (authService.hasMissingConsents) {
+        debugPrint('[HomeScreen] Creating missing consents...');
         final consentResults = await authService.autoCreateMissingConsents();
 
         final successCount = consentResults.values.where((v) => v).length;
@@ -138,11 +144,15 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             ),
           );
         }
+      } else {
+        debugPrint('[HomeScreen] All consents exist, skipping creation');
       }
 
       // Refresh consent statuses to check if any were approved
+      debugPrint('[HomeScreen] Refreshing consent statuses...');
       try {
         await authService.refreshAllConsents();
+        debugPrint('[HomeScreen] Consent statuses refreshed successfully');
       } catch (e) {
         // Continue even if refresh fails
         debugPrint('Failed to refresh consents: $e');
@@ -159,6 +169,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         accountProvider.fetchAllAccounts(),
         productProvider.fetchAllProducts(),
       ]);
+
+      // Auto-load personalized news after transactions are loaded
+      _loadPersonalizedNews();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -168,6 +181,36 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
 
     setState(() => _isInitialized = true);
+  }
+
+  /// Automatically loads personalized news based on transaction history
+  void _loadPersonalizedNews() {
+    // Use addPostFrameCallback to avoid calling provider methods during build
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted) return;
+
+      final newsProvider = context.read<NewsProvider>();
+      final accountProvider = context.read<AccountProvider>();
+
+      final allTransactions = accountProvider.allTransactions;
+
+      if (allTransactions.isNotEmpty) {
+        debugPrint('[HomeScreen] Auto-loading personalized news with ${allTransactions.length} transactions');
+        try {
+          await newsProvider.fetchPersonalizedNews(
+            transactions: allTransactions,
+            topN: 10,
+            maxCategories: 5,
+          );
+          debugPrint('[HomeScreen] Personalized news loaded successfully');
+        } catch (e) {
+          debugPrint('[HomeScreen] Error auto-loading news: $e');
+          // Don't show error to user, news is optional
+        }
+      } else {
+        debugPrint('[HomeScreen] No transactions available for personalized news');
+      }
+    });
   }
 
   // ДОБАВЬТЕ ЭТОТ МЕТОД - он должен быть внутри класса _HomeScreenState
@@ -278,6 +321,36 @@ class DashboardTab extends StatelessWidget {
     final authService = context.read<AuthService>();
     final accountProvider = context.read<AccountProvider>();
 
+    // First check if consent already exists and is approved
+    if (authService.hasRequiredConsents(bankCode)) {
+      debugPrint('[DashboardTab] Consent for $bankCode is already approved, refreshing instead of recreating');
+
+      // Just refresh the status and reload accounts instead of recreating
+      try {
+        await authService.refreshAccountConsentStatus(bankCode);
+        await accountProvider.fetchAllAccounts();
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Данные ${ApiConfig.getBankName(bankCode)} обновлены'),
+              backgroundColor: AppTheme.successGreen,
+            ),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Ошибка обновления: $e'),
+              backgroundColor: AppTheme.errorRed,
+            ),
+          );
+        }
+      }
+      return;
+    }
+
     // Show loading dialog
     showDialog(
       context: context,
@@ -300,6 +373,7 @@ class DashboardTab extends StatelessWidget {
     );
 
     try {
+      debugPrint('[DashboardTab] Recreating consent for $bankCode');
       // Recreate account consent
       await authService.recreateAccountConsent(bankCode);
 

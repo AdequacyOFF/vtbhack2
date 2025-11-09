@@ -137,6 +137,35 @@ class AccountProvider with ChangeNotifier {
 
       _accounts = allAccounts;
       _balances = allBalances;
+
+      // Automatically fetch transactions for all accounts
+      debugPrint('[AccountProvider] Auto-fetching transactions for ${allAccounts.length} accounts');
+      for (final account in allAccounts) {
+        try {
+          final service = _authService.getBankService(account.bankCode);
+          final consent = await _authService.getAccountConsent(account.bankCode);
+
+          if (consent.isApproved) {
+            final previousTransactions = _transactions[account.accountId] ?? [];
+            final newTransactions = await service.getTransactions(
+              account.accountId,
+              consent.consentId,
+              fromDate: DateTime.now().subtract(const Duration(days: 365)).toIso8601String(),
+              toDate: DateTime.now().toIso8601String(),
+            );
+
+            _transactions[account.accountId] = newTransactions;
+            debugPrint('[AccountProvider] Loaded ${newTransactions.length} transactions for account ${account.accountId}');
+
+            // Check for new transactions
+            _checkNewTransactions(account, newTransactions, previousTransactions);
+          }
+        } catch (e) {
+          debugPrint('Error auto-fetching transactions for ${account.accountId}: $e');
+          // Don't fail the whole operation if one account's transactions fail
+        }
+      }
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -274,9 +303,9 @@ class AccountProvider with ChangeNotifier {
   }
 
   /// Refresh data
+  /// Note: fetchAllAccounts() now automatically loads transactions, so no need to call fetchAllTransactions() separately
   Future<void> refresh() async {
     await fetchAllAccounts();
-    await fetchAllTransactions();
   }
 
   void clearError() {

@@ -25,16 +25,16 @@ class AccountConsent {
 
   Map<String, dynamic> toJson() {
     return {
-      'consentId': consentId,
+      'consent_id': consentId,  // Use underscore to match fromJson
       'bankCode': bankCode,
       'status': status,
-      'createdAt': createdAt,
-      'autoApproved': autoApproved,
+      'created_at': createdAt,  // Use underscore to match fromJson
+      'auto_approved': autoApproved,  // Use underscore to match fromJson
     };
   }
 
-  bool get isApproved => status == 'approved' || status == 'active';
-  bool get isPending => status == 'pending' || status == 'awaiting_authorization';
+  bool get isApproved => status == 'approved' || status == 'active' || status == 'Authorized';
+  bool get isPending => status == 'pending' || status == 'awaiting_authorization' || status == 'AwaitingAuthorization';
 }
 
 
@@ -65,15 +65,16 @@ class PaymentConsent {
 
   Map<String, dynamic> toJson() {
     return {
-      'consentId': consentId,
+      'consent_id': consentId,  // Use underscore to match fromJson
       'bankCode': bankCode,
       'status': status,
-      'consentType': consentType,
-      'autoApproved': autoApproved,
+      'consent_type': consentType,  // Use underscore to match fromJson
+      'auto_approved': autoApproved,  // Use underscore to match fromJson
     };
   }
 
-  bool get isApproved => status == 'approved' || status == 'active';
+  bool get isApproved => status == 'approved' || status == 'active' || status == 'Authorized';
+  bool get isPending => status == 'pending' || status == 'awaiting_authorization' || status == 'AwaitingAuthorization';
 }
 
 class ProductAgreementConsent {
@@ -102,13 +103,14 @@ class ProductAgreementConsent {
 
   Map<String, dynamic> toJson() {
     return {
-      'consentId': consentId,
+      'consent_id': consentId,  // Use underscore to match fromJson
       'bankCode': bankCode,
       'status': status,
-      'autoApproved': autoApproved,
+      'auto_approved': autoApproved,  // Use underscore to match fromJson
     };
   }
 
-  bool get isApproved => status == 'approved' || status == 'active';
+  bool get isApproved => status == 'approved' || status == 'active' || status == 'Authorized';
+  bool get isPending => status == 'pending' || status == 'awaiting_authorization' || status == 'AwaitingAuthorization';
 }
 

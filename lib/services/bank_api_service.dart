@@ -19,7 +19,7 @@ class BankApiService {
 
   // Helper to check if status is approved/active
   bool _isStatusApproved(String? status) {
-    return status == 'approved' || status == 'active';
+    return status == 'approved' || status == 'active' || status == 'Authorized';
   }
 
   // Helper method for executing HTTP requests with retry mechanism
@@ -336,6 +336,9 @@ class BankApiService {
       throw Exception('[$bankCode] Cannot check consent status: consent ID is empty!');
     }
 
+    // Ensure we have a valid token
+    final token = await ensureValidToken();
+
     // Extract base team ID from client ID (e.g., "team201-10" -> "team201")
     final baseTeamId = clientId.contains('-') ? clientId.split('-')[0] : clientId;
     print('[$bankCode] Base team ID for x-fapi-interaction-id: "$baseTeamId"');
@@ -347,12 +350,13 @@ class BankApiService {
       final response = await http.get(
         Uri.parse(url),
         headers: {
+          'Authorization': 'Bearer ${token.accessToken}',
           'accept': 'application/json',
           'x-fapi-interaction-id': baseTeamId,
         },
       );
 
-      print('[$bankCode] Request headers: {accept: application/json, x-fapi-interaction-id: $baseTeamId}');
+      print('[$bankCode] Request headers: {Authorization: Bearer <token>, accept: application/json, x-fapi-interaction-id: $baseTeamId}');
       print('[$bankCode] Status check response code: ${response.statusCode}');
       print('[$bankCode] Status check response body: ${response.body}');
 
@@ -365,27 +369,29 @@ class BankApiService {
             final data = json['data'];
 
             // Convert API response format to our internal format
-            // Also check for request_id (SBank uses this)
+            // Extract the NEW consent_id from the response (may change when approved)
+            final newConsentId = data['consentId'] ?? data['consent_id'] ?? data['request_id'] ?? consentId;
             final consentData = {
-              'consent_id': data['consentId'] ?? data['consent_id'] ?? data['request_id'] ?? consentId,
+              'consent_id': newConsentId,
               'status': data['status'] ?? 'pending',
               'created_at': data['creationDateTime'] ?? data['creation_date_time'] ?? data['created_at'] ?? DateTime.now().toIso8601String(),
               'auto_approved': _isStatusApproved(data['status']),
             };
 
-            print('[$bankCode] Parsed consent status: ${consentData["status"]} (approved: ${consentData["auto_approved"]})');
+            print('[$bankCode] Parsed consent - ID: $newConsentId, Status: ${consentData["status"]}, Approved: ${consentData["auto_approved"]}');
             return AccountConsent.fromJson(consentData, bankCode);
           } else {
             // If no 'data' field, try to parse directly
-            // Also check for request_id (SBank uses this)
+            // Extract the NEW consent_id from the response (may change when approved)
+            final newConsentId = json['consentId'] ?? json['consent_id'] ?? json['request_id'] ?? consentId;
             final consentData = {
-              'consent_id': json['consentId'] ?? json['consent_id'] ?? json['request_id'] ?? consentId,
+              'consent_id': newConsentId,
               'status': json['status'] ?? 'pending',
               'created_at': json['creationDateTime'] ?? json['creation_date_time'] ?? json['created_at'] ?? DateTime.now().toIso8601String(),
               'auto_approved': _isStatusApproved(json['status']),
             };
 
-            print('[$bankCode] Parsed consent status (direct): ${consentData["status"]}');
+            print('[$bankCode] Parsed consent (direct) - ID: $newConsentId, Status: ${consentData["status"]}, Approved: ${consentData["auto_approved"]}');
             return AccountConsent.fromJson(consentData, bankCode);
           }
         } catch (e) {
@@ -403,6 +409,9 @@ class BankApiService {
     print('[$bankCode] Checking payment consent status for ID: $consentId');
     print('[$bankCode] Client ID for header: "$clientId"');
 
+    // Ensure we have a valid token
+    final token = await ensureValidToken();
+
     // Extract base team ID from client ID (e.g., "team201-10" -> "team201")
     final baseTeamId = clientId.contains('-') ? clientId.split('-')[0] : clientId;
     print('[$bankCode] Base team ID for x-fapi-interaction-id: "$baseTeamId"');
@@ -411,6 +420,7 @@ class BankApiService {
       final response = await http.get(
         Uri.parse('$baseUrl/payment-consents/$consentId'),
         headers: {
+          'Authorization': 'Bearer ${token.accessToken}',
           'accept': 'application/json',
           'x-fapi-interaction-id': baseTeamId,
         },
@@ -461,6 +471,9 @@ class BankApiService {
     print('[$bankCode] Checking product consent status for ID: $consentId');
     print('[$bankCode] Client ID for header: "$clientId"');
 
+    // Ensure we have a valid token
+    final token = await ensureValidToken();
+
     // Extract base team ID from client ID (e.g., "team201-10" -> "team201")
     final baseTeamId = clientId.contains('-') ? clientId.split('-')[0] : clientId;
     print('[$bankCode] Base team ID for x-fapi-interaction-id: "$baseTeamId"');
@@ -469,6 +482,7 @@ class BankApiService {
       final response = await http.get(
         Uri.parse('$baseUrl/product-agreement-consents/$consentId'),
         headers: {
+          'Authorization': 'Bearer ${token.accessToken}',
           'accept': 'application/json',
           'x-fapi-interaction-id': baseTeamId,
         },

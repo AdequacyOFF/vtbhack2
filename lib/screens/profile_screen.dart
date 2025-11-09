@@ -70,14 +70,6 @@ class ProfileScreen extends StatelessWidget {
 
           _buildActionCard(
             context,
-            icon: Icons.analytics,
-            title: 'Экспорт для ML анализа',
-            subtitle: 'Получить данные для нейросети',
-            onTap: () => _exportForML(context),
-          ),
-
-          _buildActionCard(
-            context,
             icon: Icons.link,
             title: 'Связать соцсети',
             subtitle: 'Переводы по никнейму',
