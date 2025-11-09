@@ -51,6 +51,15 @@ The app uses credentials from `lib/config/api_config.dart`:
   - ABank: https://abank.open.bankingapi.ru
   - SBank: https://sbank.open.bankingapi.ru
 
+### Linting & Analysis
+```bash
+# Analyze code for issues
+flutter analyze
+
+# Check for outdated packages
+flutter pub outdated
+```
+
 ### Testing
 ```bash
 # Run all tests
@@ -58,12 +67,18 @@ flutter test
 
 # Run with coverage
 flutter test --coverage
+
+# Run a single test file
+flutter test test/widget_test.dart
 ```
 
 ### Building
 ```bash
-# Build Android APK
+# Build Android APK (debug)
 flutter build apk
+
+# Build Android APK (release)
+flutter build apk --release
 
 # Build Android App Bundle
 flutter build appbundle
@@ -87,12 +102,13 @@ lib/
 │   └── transfer_provider.dart     # Money transfer logic
 ├── screens/          # UI screens
 │   ├── login_screen.dart
-│   ├── home_screen.dart           # Dashboard with aggregated accounts
-│   ├── accounts_screen.dart       # Account details & transactions
-│   ├── products_screen.dart       # Deposits, loans, cards
-│   ├── transfer_screen.dart       # Inter-bank transfers
-│   ├── atm_map_screen.dart        # ATM locations on map
-│   └── profile_screen.dart        # User profile & settings
+│   ├── home_screen.dart                  # Dashboard with aggregated accounts
+│   ├── accounts_screen.dart              # Account details & transactions
+│   ├── products_screen.dart              # Deposits, loans, cards
+│   ├── transfer_screen.dart              # Inter-bank transfers
+│   ├── atm_map_screen.dart               # ATM locations on map
+│   ├── consent_management_screen.dart    # Consent status & refresh
+│   └── profile_screen.dart               # User profile & settings
 └── main.dart         # App entry point
 ```
 
@@ -140,6 +156,24 @@ Three types of consents:
 Banks handle consent differently:
 - VBank & ABank: Auto-approve
 - SBank: Requires manual user approval
+
+Consent refresh methods in `AuthService`:
+```dart
+// Refresh single consent type for a bank
+await authService.refreshAccountConsentStatus('sbank');
+await authService.refreshPaymentConsentStatus('sbank');
+await authService.refreshProductConsentStatus('sbank');
+
+// Refresh all consents for a specific bank
+await authService.refreshAllConsentsForBank('sbank');
+
+// Refresh all consents for all banks
+await authService.refreshAllConsents();
+
+// Check consent status
+final hasPending = authService.hasPendingConsents;
+final pendingBanks = authService.banksWithPendingConsents;
+```
 
 ### Banking API Integration
 
@@ -230,6 +264,14 @@ dio.interceptors.add(LogInterceptor(
 3. Check consent status in logs
 4. For SBank, manual approval needed in bank UI
 
+### Handling Pending Consents (SBank)
+When consents require manual approval:
+1. Consent is created with status `pending` or `awaiting_authorization`
+2. User must visit bank website to approve consent
+3. After bank-side approval, use `refreshAccountConsentStatus(bankCode)` to update local status
+4. Check `authService.hasPendingConsents` to detect banks needing approval
+5. Get list with `authService.banksWithPendingConsents`
+
 ## Important Notes
 
 - Always check consent approval before API calls
@@ -237,6 +279,25 @@ dio.interceptors.add(LogInterceptor(
 - Inter-bank transfers require `bank_code` in creditor account
 - PDF generation requires storage permissions on Android
 - Yandex Maps requires API key initialization
+
+### Consent Status Management
+- Approved consent states: `approved` or `active`
+- Pending consent states: `pending` or `awaiting_authorization`
+- Use `refreshAccountConsentStatus(bankCode)` to poll consent status from bank
+- SBank requires manual approval - poll status after user approves on bank website
+- Consent IDs are extracted from both flat and nested response structures
+
+**Important: SBank uses `request_id` instead of `consent_id`**
+- SBank returns `request_id` field (e.g., "req-4de5076a2382") in consent creation responses
+- Other banks (VBank, ABank) return `consent_id`
+- The code handles both by checking: `consent_id` → `consentId` → `request_id`
+- The `request_id` is used for all subsequent status checks
+
+### API Retry Mechanism
+- All bank API calls use exponential backoff retry (3 attempts by default)
+- Initial delay: 2 seconds, doubles on each retry
+- Handles: SocketException, TimeoutException, HttpException
+- 30-second timeout per request
 
 ## Troubleshooting
 
@@ -251,3 +312,9 @@ dio.interceptors.add(LogInterceptor(
 
 ### Issue: PDF generation fails
 **Solution**: Ensure storage permissions granted. Check Android API level for scoped storage.
+
+### Issue: Consent approved on bank website but app shows "pending"
+**Solution**: The app needs to poll the bank API to refresh consent status. Call `authService.refreshAccountConsentStatus(bankCode)` or `authService.refreshAllConsentsForBank(bankCode)` after user approves on bank website. Consider implementing periodic polling or a manual "Refresh" button in the UI.
+
+### Issue: Empty consent_id in response
+**Solution**: Check API response structure. The code handles both nested (`data.consent_id`) and flat (`consent_id`) structures. If consent_id is empty, the bank may not have returned it properly - check response body in logs.

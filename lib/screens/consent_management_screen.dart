@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import '../services/consent_polling_service.dart';
 import '../config/api_config.dart';
 import '../config/app_theme.dart';
 
@@ -20,6 +21,7 @@ class _ConsentManagementScreenState extends State<ConsentManagementScreen> {
   @override
   Widget build(BuildContext context) {
     final authService = context.read<AuthService>();
+    final pollingService = context.read<ConsentPollingService>();
 
     return Scaffold(
       appBar: AppBar(
@@ -58,6 +60,53 @@ class _ConsentManagementScreenState extends State<ConsentManagementScreen> {
           ),
 
           const SizedBox(height: 16),
+
+          // Polling Status Indicator
+          if (pollingService.isPolling) ...[
+            Card(
+              color: Colors.blue.shade50,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: AppTheme.primaryBlue,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'Автоматическая проверка статусов',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Проверка ${pollingService.pollCount} из ${ConsentPollingService.maxPollAttempts}',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        pollingService.stopPolling();
+                        setState(() {});
+                      },
+                      child: const Text('Остановить'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+          ],
 
           // Create All Consents Button
           Card(
@@ -320,6 +369,7 @@ class _ConsentManagementScreenState extends State<ConsentManagementScreen> {
 
     try {
       final authService = context.read<AuthService>();
+      final pollingService = context.read<ConsentPollingService>();
       final results = await authService.createAllConsents();
 
       setState(() {
@@ -335,6 +385,18 @@ class _ConsentManagementScreenState extends State<ConsentManagementScreen> {
             backgroundColor: successCount > 0 ? AppTheme.successGreen : AppTheme.errorRed,
           ),
         );
+
+        // Start polling if there are pending consents
+        if (authService.hasPendingConsents && !pollingService.isPolling) {
+          pollingService.startPolling();
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Запущена автоматическая проверка статусов'),
+              backgroundColor: AppTheme.primaryBlue,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
       }
     } catch (e) {
       setState(() => _isCreatingConsents = false);
@@ -372,6 +434,7 @@ class _ConsentManagementScreenState extends State<ConsentManagementScreen> {
 
     try {
       final authService = context.read<AuthService>();
+      final pollingService = context.read<ConsentPollingService>();
       await authService.recreateAccountConsent(bankCode);
 
       if (mounted) {
@@ -384,6 +447,11 @@ class _ConsentManagementScreenState extends State<ConsentManagementScreen> {
             backgroundColor: AppTheme.successGreen,
           ),
         );
+
+        // Start polling if consent is pending
+        if (authService.hasPendingConsents && !pollingService.isPolling) {
+          pollingService.startPolling();
+        }
       }
     } catch (e) {
       if (mounted) {

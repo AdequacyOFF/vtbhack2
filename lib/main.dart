@@ -5,6 +5,7 @@ import 'package:yandex_mapkit/yandex_mapkit.dart';
 import 'config/app_theme.dart';
 import 'config/api_config.dart';
 import 'services/auth_service.dart';
+import 'services/consent_polling_service.dart';
 import 'providers/account_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/transfer_provider.dart';
@@ -29,6 +30,12 @@ class MyApp extends StatelessWidget {
       providers: [
         Provider<AuthService>(
           create: (_) => AuthService(),
+        ),
+        ProxyProvider<AuthService, ConsentPollingService>(
+          create: (context) => ConsentPollingService(context.read<AuthService>()),
+          update: (context, authService, previous) =>
+              previous ?? ConsentPollingService(authService),
+          dispose: (_, pollingService) => pollingService.dispose(),
         ),
         ChangeNotifierProxyProvider<AuthService, AccountProvider>(
           create: (context) => AccountProvider(context.read<AuthService>()),

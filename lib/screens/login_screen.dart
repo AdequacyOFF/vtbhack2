@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/auth_service.dart';
+import '../services/consent_polling_service.dart';
 import '../config/app_theme.dart';
 import 'home_screen.dart';
 
@@ -34,7 +35,45 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final authService = context.read<AuthService>();
+      final pollingService = context.read<ConsentPollingService>();
+
       await authService.setClientId(clientId);
+
+      // Auto-create consents for all banks
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Создание согласий для банков...'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      final consentResults = await authService.autoCreateMissingConsents();
+      final successCount = consentResults.values.where((v) => v).length;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Создано согласий: $successCount из ${consentResults.length}'),
+            backgroundColor: successCount > 0 ? AppTheme.successGreen : AppTheme.errorRed,
+          ),
+        );
+      }
+
+      // Start polling for pending consents
+      if (authService.hasPendingConsents) {
+        pollingService.startPolling();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Некоторые банки требуют ручного подтверждения согласий'),
+              backgroundColor: AppTheme.warningOrange,
+              duration: Duration(seconds: 3),
+            ),
+          );
+        }
+      }
 
       if (mounted) {
         Navigator.of(context).pushReplacement(

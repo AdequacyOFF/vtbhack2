@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../providers/account_provider.dart';
 import '../providers/product_provider.dart';
 import '../services/auth_service.dart';
+import '../services/consent_polling_service.dart';
 import '../config/app_theme.dart';
 import '../config/api_config.dart';
 import 'accounts_screen.dart';
@@ -26,7 +27,29 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _setupPollingCallbacks();
     _initialize();
+  }
+
+  void _setupPollingCallbacks() {
+    final pollingService = context.read<ConsentPollingService>();
+    final accountProvider = context.read<AccountProvider>();
+
+    // Setup callback for when a consent is approved
+    pollingService.onConsentApproved((bankCode) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('✓ Согласие одобрено: ${ApiConfig.getBankName(bankCode)}'),
+            backgroundColor: AppTheme.successGreen,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+
+        // Refresh accounts to fetch data from newly approved bank
+        accountProvider.fetchAllAccounts();
+      }
+    });
   }
 
   @override
@@ -92,6 +115,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final authService = context.read<AuthService>();
     final accountProvider = context.read<AccountProvider>();
     final productProvider = context.read<ProductProvider>();
+    final pollingService = context.read<ConsentPollingService>();
 
     try {
       // Auto-create missing consents on first load
@@ -118,6 +142,12 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
       } catch (e) {
         // Continue even if refresh fails
         debugPrint('Failed to refresh consents: $e');
+      }
+
+      // Start polling if there are pending consents
+      if (authService.hasPendingConsents && !pollingService.isPolling) {
+        debugPrint('[HomeScreen] Starting consent polling for pending banks: ${authService.banksWithPendingConsents}');
+        pollingService.startPolling();
       }
 
       // Fetch accounts and products
@@ -335,10 +365,40 @@ class DashboardTab extends StatelessWidget {
                           width: double.infinity,
                           child: ElevatedButton.icon(
                             onPressed: () async {
-                              // Refresh consent statuses
-                              await authService.refreshAllConsents();
+                              final pollingService = context.read<ConsentPollingService>();
+
+                              // Show loading indicator
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Проверка статусов согласий...'),
+                                  duration: Duration(seconds: 1),
+                                ),
+                              );
+
+                              // Trigger immediate poll
+                              await pollingService.pollNow();
+
                               if (context.mounted) {
                                 await accountProvider.fetchAllAccounts();
+
+                                // Check if consents are still pending
+                                if (authService.banksWithPendingConsents.isEmpty) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('✓ Все согласия одобрены!'),
+                                      backgroundColor: AppTheme.successGreen,
+                                    ),
+                                  );
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Ожидание одобрения: ${authService.banksWithPendingConsents.map((c) => ApiConfig.getBankName(c)).join(", ")}',
+                                      ),
+                                      backgroundColor: AppTheme.warningOrange,
+                                    ),
+                                  );
+                                }
                               }
                             },
                             icon: const Icon(Icons.sync, size: 18),

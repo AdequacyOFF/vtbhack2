@@ -158,8 +158,8 @@ class BankApiService {
             print('[$bankCode] Response has "data" wrapper (nested structure)');
             final data = json['data'];
 
-            // Try consent_id first (with underscore), then consentId (camelCase)
-            consentId = data['consent_id'] ?? data['consentId'] ?? '';
+            // Try consent_id first, then consentId, then request_id (for SBank)
+            consentId = data['consent_id'] ?? data['consentId'] ?? data['request_id'] ?? '';
             status = data['status'] ?? 'pending';
             createdAt = data['creationDateTime'] ?? data['creation_date_time'] ?? data['created_at'] ?? DateTime.now().toIso8601String();
 
@@ -168,12 +168,16 @@ class BankApiService {
             // Flat structure (no 'data' wrapper) - this is what SBank uses
             print('[$bankCode] Flat response structure (no "data" wrapper) - SBank format');
 
-            // Try consent_id first (with underscore), then consentId (camelCase)
-            consentId = json['consent_id'] ?? json['consentId'] ?? '';
+            // Try consent_id first, then consentId, then request_id (for SBank)
+            // SBank specifically returns "request_id" instead of "consent_id"
+            consentId = json['consent_id'] ?? json['consentId'] ?? json['request_id'] ?? '';
             status = json['status'] ?? 'pending';
             createdAt = json['creationDateTime'] ?? json['creation_date_time'] ?? json['created_at'] ?? DateTime.now().toIso8601String();
 
             print('[$bankCode] Extracted directly: consent_id="$consentId", status="$status"');
+            if (json['request_id'] != null) {
+              print('[$bankCode] NOTE: Using request_id from SBank: "$consentId"');
+            }
           }
 
           if (consentId.isEmpty) {
@@ -234,12 +238,12 @@ class BankApiService {
 
         if (json is Map && json.containsKey('data') && json['data'] != null) {
           final data = json['data'];
-          consentId = data['consent_id'] ?? data['consentId'] ?? '';
+          consentId = data['consent_id'] ?? data['consentId'] ?? data['request_id'] ?? '';
           status = data['status'] ?? 'pending';
           consentType = data['consent_type'] ?? data['consentType'] ?? 'vrp';
         } else {
-          // Flat structure - prioritize underscore format
-          consentId = json['consent_id'] ?? json['consentId'] ?? '';
+          // Flat structure - prioritize underscore format, also check request_id for SBank
+          consentId = json['consent_id'] ?? json['consentId'] ?? json['request_id'] ?? '';
           status = json['status'] ?? 'pending';
           consentType = json['consent_type'] ?? json['consentType'] ?? 'vrp';
         }
@@ -295,11 +299,11 @@ class BankApiService {
 
         if (json is Map && json.containsKey('data') && json['data'] != null) {
           final data = json['data'];
-          consentId = data['consent_id'] ?? data['consentId'] ?? '';
+          consentId = data['consent_id'] ?? data['consentId'] ?? data['request_id'] ?? '';
           status = data['status'] ?? 'pending';
         } else {
-          // Flat structure - prioritize underscore format
-          consentId = json['consent_id'] ?? json['consentId'] ?? '';
+          // Flat structure - prioritize underscore format, also check request_id for SBank
+          consentId = json['consent_id'] ?? json['consentId'] ?? json['request_id'] ?? '';
           status = json['status'] ?? 'pending';
         }
 
@@ -332,6 +336,10 @@ class BankApiService {
       throw Exception('[$bankCode] Cannot check consent status: consent ID is empty!');
     }
 
+    // Extract base team ID from client ID (e.g., "team201-10" -> "team201")
+    final baseTeamId = clientId.contains('-') ? clientId.split('-')[0] : clientId;
+    print('[$bankCode] Base team ID for x-fapi-interaction-id: "$baseTeamId"');
+
     final url = '$baseUrl/account-consents/$consentId';
     print('[$bankCode] Request URL: $url');
 
@@ -340,11 +348,11 @@ class BankApiService {
         Uri.parse(url),
         headers: {
           'accept': 'application/json',
-          'x-fapi-interaction-id': clientId,
+          'x-fapi-interaction-id': baseTeamId,
         },
       );
 
-      print('[$bankCode] Request headers: {accept: application/json, x-fapi-interaction-id: $clientId}');
+      print('[$bankCode] Request headers: {accept: application/json, x-fapi-interaction-id: $baseTeamId}');
       print('[$bankCode] Status check response code: ${response.statusCode}');
       print('[$bankCode] Status check response body: ${response.body}');
 
@@ -357,10 +365,11 @@ class BankApiService {
             final data = json['data'];
 
             // Convert API response format to our internal format
+            // Also check for request_id (SBank uses this)
             final consentData = {
-              'consent_id': data['consentId'] ?? data['consent_id'] ?? consentId,
+              'consent_id': data['consentId'] ?? data['consent_id'] ?? data['request_id'] ?? consentId,
               'status': data['status'] ?? 'pending',
-              'created_at': data['creationDateTime'] ?? data['creation_date_time'] ?? DateTime.now().toIso8601String(),
+              'created_at': data['creationDateTime'] ?? data['creation_date_time'] ?? data['created_at'] ?? DateTime.now().toIso8601String(),
               'auto_approved': _isStatusApproved(data['status']),
             };
 
@@ -368,10 +377,11 @@ class BankApiService {
             return AccountConsent.fromJson(consentData, bankCode);
           } else {
             // If no 'data' field, try to parse directly
+            // Also check for request_id (SBank uses this)
             final consentData = {
-              'consent_id': json['consentId'] ?? json['consent_id'] ?? consentId,
+              'consent_id': json['consentId'] ?? json['consent_id'] ?? json['request_id'] ?? consentId,
               'status': json['status'] ?? 'pending',
-              'created_at': json['creationDateTime'] ?? json['creation_date_time'] ?? DateTime.now().toIso8601String(),
+              'created_at': json['creationDateTime'] ?? json['creation_date_time'] ?? json['created_at'] ?? DateTime.now().toIso8601String(),
               'auto_approved': _isStatusApproved(json['status']),
             };
 
@@ -393,12 +403,16 @@ class BankApiService {
     print('[$bankCode] Checking payment consent status for ID: $consentId');
     print('[$bankCode] Client ID for header: "$clientId"');
 
+    // Extract base team ID from client ID (e.g., "team201-10" -> "team201")
+    final baseTeamId = clientId.contains('-') ? clientId.split('-')[0] : clientId;
+    print('[$bankCode] Base team ID for x-fapi-interaction-id: "$baseTeamId"');
+
     return await _executeWithRetry(() async {
       final response = await http.get(
         Uri.parse('$baseUrl/payment-consents/$consentId'),
         headers: {
           'accept': 'application/json',
-          'x-fapi-interaction-id': clientId,
+          'x-fapi-interaction-id': baseTeamId,
         },
       );
 
@@ -413,8 +427,9 @@ class BankApiService {
             final data = json['data'];
 
             // Convert API response format to our internal format
+            // Also check for request_id (SBank uses this)
             final consentData = {
-              'consent_id': data['consentId'] ?? data['consent_id'] ?? consentId,
+              'consent_id': data['consentId'] ?? data['consent_id'] ?? data['request_id'] ?? consentId,
               'status': data['status'] ?? 'pending',
               'consent_type': data['consentType'] ?? data['consent_type'] ?? 'vrp',
               'auto_approved': _isStatusApproved(data['status']),
@@ -423,8 +438,9 @@ class BankApiService {
             return PaymentConsent.fromJson(consentData, bankCode);
           } else {
             // If no 'data' field, try to parse directly
+            // Also check for request_id (SBank uses this)
             final consentData = {
-              'consent_id': json['consentId'] ?? json['consent_id'] ?? consentId,
+              'consent_id': json['consentId'] ?? json['consent_id'] ?? json['request_id'] ?? consentId,
               'status': json['status'] ?? 'pending',
               'consent_type': json['consentType'] ?? json['consent_type'] ?? 'vrp',
               'auto_approved': _isStatusApproved(json['status']),
@@ -445,12 +461,16 @@ class BankApiService {
     print('[$bankCode] Checking product consent status for ID: $consentId');
     print('[$bankCode] Client ID for header: "$clientId"');
 
+    // Extract base team ID from client ID (e.g., "team201-10" -> "team201")
+    final baseTeamId = clientId.contains('-') ? clientId.split('-')[0] : clientId;
+    print('[$bankCode] Base team ID for x-fapi-interaction-id: "$baseTeamId"');
+
     return await _executeWithRetry(() async {
       final response = await http.get(
         Uri.parse('$baseUrl/product-agreement-consents/$consentId'),
         headers: {
           'accept': 'application/json',
-          'x-fapi-interaction-id': clientId,
+          'x-fapi-interaction-id': baseTeamId,
         },
       );
 
@@ -465,8 +485,9 @@ class BankApiService {
             final data = json['data'];
 
             // Convert API response format to our internal format
+            // Also check for request_id (SBank uses this)
             final consentData = {
-              'consent_id': data['consentId'] ?? data['consent_id'] ?? consentId,
+              'consent_id': data['consentId'] ?? data['consent_id'] ?? data['request_id'] ?? consentId,
               'status': data['status'] ?? 'pending',
               'auto_approved': _isStatusApproved(data['status']),
             };
@@ -474,8 +495,9 @@ class BankApiService {
             return ProductAgreementConsent.fromJson(consentData, bankCode);
           } else {
             // If no 'data' field, try to parse directly
+            // Also check for request_id (SBank uses this)
             final consentData = {
-              'consent_id': json['consentId'] ?? json['consent_id'] ?? consentId,
+              'consent_id': json['consentId'] ?? json['consent_id'] ?? json['request_id'] ?? consentId,
               'status': json['status'] ?? 'pending',
               'auto_approved': _isStatusApproved(json['status']),
             };
