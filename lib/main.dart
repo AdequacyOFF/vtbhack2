@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:yandex_mapkit/yandex_mapkit.dart';
+import 'package:yandex_maps_mapkit/init.dart' as yandex_init;
 
 import 'config/app_theme.dart';
-// Удалил: import 'config/api_config.dart';
+import 'config/api_config.dart';
 import 'services/auth_service.dart';
 import 'services/notification_service.dart';
 import 'providers/account_provider.dart';
@@ -15,7 +15,8 @@ import 'screens/home_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  AndroidYandexMap.useAndroidViewSurface = false;
+  // Initialize Yandex MapKit with API key
+  await yandex_init.initMapkit(apiKey: ApiConfig.yandexMapsApiKey);
 
   runApp(const MyApp());
 }
