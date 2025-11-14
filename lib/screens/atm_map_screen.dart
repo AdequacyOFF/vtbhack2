@@ -6,19 +6,19 @@ import 'package:yandex_maps_mapkit/yandex_map.dart';
 import 'package:yandex_maps_mapkit/image.dart' as image_provider;
 import '../config/api_config.dart';
 
-// ATM locations for demonstration (Moscow area)
+
 final Map<String, List<Point>> atmLocations = {
-  'vbank': [ // VBank
+  'vbank': [
     const Point(latitude: 55.7558, longitude: 37.6173), // Red Square area
     const Point(latitude: 55.7522, longitude: 37.6156),
     const Point(latitude: 55.7514, longitude: 37.6198),
   ],
-  'abank': [ // ABank
+  'abank': [
     const Point(latitude: 55.7540, longitude: 37.6210),
     const Point(latitude: 55.7500, longitude: 37.6180),
     const Point(latitude: 55.7560, longitude: 37.6150),
   ],
-  'sbank': [ // SBank
+  'sbank': [
     const Point(latitude: 55.7530, longitude: 37.6190),
     const Point(latitude: 55.7510, longitude: 37.6170),
     const Point(latitude: 55.7545, longitude: 37.6200),
@@ -166,11 +166,11 @@ class _AtmMapScreenState extends State<AtmMapScreen> {
   String _getBankInitial(String bankCode) {
     switch (bankCode) {
       case 'vbank':
-        return 'VTB';
+        return 'VBank';
       case 'abank':
-        return 'T-Bank';
+        return 'ABank';
       case 'sbank':
-        return 'СБ';
+        return 'SBank';
       default:
         return 'ATM';
     }

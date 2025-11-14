@@ -136,9 +136,9 @@ class ProductProvider with ChangeNotifier {
 
   String _getBankName(String bankCode) {
     switch (bankCode) {
-      case 'vbank': return 'ВТБ';
-      case 'abank': return 'Альфа-Банк';
-      case 'sbank': return 'Сбербанк';
+      case 'vbank': return 'VBank';
+      case 'abank': return 'ABank';
+      case 'sbank': return 'SBank';
       default: return bankCode;
     }
   }
