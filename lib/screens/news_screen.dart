@@ -152,7 +152,12 @@ class _NewsScreenState extends State<NewsScreen> {
           return RefreshIndicator(
             onRefresh: _loadNews,
             child: ListView.builder(
-              padding: const EdgeInsets.all(16),
+              padding: const EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: 110, // Space for floating bottom bar
+              ),
               itemCount: newsProvider.newsArticles.length,
               itemBuilder: (context, index) {
                 final news = newsProvider.newsArticles[index];
