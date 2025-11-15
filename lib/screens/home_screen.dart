@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../providers/account_provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/news_provider.dart';
+import '../providers/virtual_account_provider.dart';
 import '../services/auth_service.dart';
 import '../services/consent_polling_service.dart';
 import '../services/notification_service.dart';
@@ -17,6 +18,8 @@ import 'atm_map_screen.dart';
 import 'profile_screen.dart';
 import 'notifications_screen.dart';
 import 'news_screen.dart';
+import 'virtual_accounts_screen.dart';
+import 'expenses_optimization_screen.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -123,6 +126,10 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final productProvider = context.read<ProductProvider>();
     final notificationService = context.read<NotificationService>();
     final pollingService = context.read<ConsentPollingService>();
+    final virtualAccountProvider = context.read<VirtualAccountProvider>();
+
+    // Connect virtual account provider to account provider for transaction processing
+    accountProvider.setVirtualAccountProvider(virtualAccountProvider);
 
     try {
       // Log current consent state
@@ -473,7 +480,7 @@ class DashboardTab extends StatelessWidget {
     required VoidCallback onTap,
   }) {
     return Container(
-      height: 110,
+      height: 125,
       decoration: AppTheme.quickActionDecoration(color: color),
       child: Material(
         color: Colors.transparent,
@@ -486,8 +493,8 @@ class DashboardTab extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  width: 48,
-                  height: 48,
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.3),
                     shape: BoxShape.circle,
@@ -495,17 +502,21 @@ class DashboardTab extends StatelessWidget {
                   child: Icon(
                     icon,
                     color: Colors.white,
-                    size: 26,
+                    size: 24,
                   ),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 8),
                 Text(
                   label,
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 15,
+                    fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    letterSpacing: 0.3,
+                    letterSpacing: 0.2,
+                    height: 1.15,
                   ),
                 ),
               ],
@@ -920,6 +931,36 @@ class DashboardTab extends StatelessWidget {
                     ),
                   ),
                 ],
+              ),
+
+              const SizedBox(height: 12),
+
+              // Virtual Accounts - Full Width Button
+              _buildQuickActionButton(
+                context: context,
+                icon: Icons.account_balance_wallet_outlined,
+                label: 'Виртуальные счета',
+                color: const Color(0xFF6366F1), // Indigo color
+                onTap: () {
+                  Navigator.of(context).push(
+                    AppAnimations.createRoute(const VirtualAccountsScreen()),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 12),
+
+              // Expenses Optimization - Full Width Button
+              _buildQuickActionButton(
+                context: context,
+                icon: Icons.auto_awesome,
+                label: 'Оптимизация расходов',
+                color: const Color(0xFF10B981), // Emerald green color
+                onTap: () {
+                  Navigator.of(context).push(
+                    AppAnimations.createRoute(const ExpensesOptimizationScreen()),
+                  );
+                },
               ),
 
               const SizedBox(height: 28),

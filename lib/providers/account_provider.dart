@@ -3,10 +3,12 @@ import '../models/bank_account.dart';
 import '../models/transaction.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
+import 'virtual_account_provider.dart';
 
 class AccountProvider with ChangeNotifier {
   final AuthService _authService;
   final NotificationService _notificationService;
+  VirtualAccountProvider? _virtualAccountProvider;
 
   List<BankAccount> _accounts = [];
   Map<String, double> _balances = {};
@@ -17,6 +19,11 @@ class AccountProvider with ChangeNotifier {
   String? _error;
 
   AccountProvider(this._authService, this._notificationService);
+
+  /// Set virtual account provider for transaction processing
+  void setVirtualAccountProvider(VirtualAccountProvider provider) {
+    _virtualAccountProvider = provider;
+  }
 
   List<BankAccount> get accounts => _accounts;
   Map<String, double> get balances => _balances;
@@ -159,11 +166,21 @@ class AccountProvider with ChangeNotifier {
 
             // Check for new transactions
             _checkNewTransactions(account, newTransactions, previousTransactions);
+
+            // Process transactions for virtual accounts
+            if (_virtualAccountProvider != null) {
+              await _virtualAccountProvider!.processTransactions(newTransactions);
+            }
           }
         } catch (e) {
           debugPrint('Error auto-fetching transactions for ${account.accountId}: $e');
           // Don't fail the whole operation if one account's transactions fail
         }
+      }
+
+      // Calculate last month's income for virtual accounts budget
+      if (_virtualAccountProvider != null) {
+        await _virtualAccountProvider!.calculateLastMonthIncome(allTransactions);
       }
 
       _isLoading = false;
@@ -228,6 +245,11 @@ class AccountProvider with ChangeNotifier {
 
         // Проверяем новые транзакции
         _checkNewTransactions(account, newTransactions, previousTransactions);
+
+        // Process transactions for virtual accounts
+        if (_virtualAccountProvider != null) {
+          await _virtualAccountProvider!.processTransactions(newTransactions);
+        }
 
         notifyListeners();
       }
