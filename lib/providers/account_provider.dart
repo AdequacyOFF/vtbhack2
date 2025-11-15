@@ -13,7 +13,6 @@ class AccountProvider with ChangeNotifier {
   List<BankAccount> _accounts = [];
   Map<String, double> _balances = {};
   Map<String, List<BankTransaction>> _transactions = {};
-  final Map<String, double> _previousBalances = {};
 
   bool _isLoading = false;
   String? _error;

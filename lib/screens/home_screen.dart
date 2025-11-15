@@ -124,7 +124,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     final authService = context.read<AuthService>();
     final accountProvider = context.read<AccountProvider>();
     final productProvider = context.read<ProductProvider>();
-    final notificationService = context.read<NotificationService>();
     final pollingService = context.read<ConsentPollingService>();
     final virtualAccountProvider = context.read<VirtualAccountProvider>();
 
@@ -230,7 +229,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         right: 16,
         bottom: 20,
       ),
-      height: 72,
+      height: 76,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(34), // Pill shape
         boxShadow: [

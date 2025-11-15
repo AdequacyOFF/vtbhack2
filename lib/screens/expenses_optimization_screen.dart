@@ -183,10 +183,15 @@ class _ExpensesOptimizationScreenState extends State<ExpensesOptimizationScreen>
                   TextField(
                     controller: _wishesController,
                     maxLines: 4,
-                    decoration: InputDecoration(
+                    minLines: 1,
+                    keyboardType: TextInputType.multiline,
+                    enableSuggestions: true,
+                    autocorrect: true,
+                    enableIMEPersonalizedLearning: true,
+                    decoration: const InputDecoration(
                       hintText: 'Например: Хочу накопить на отпуск 50000₽, снизить расходы на развлечения...',
                       border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.all(Radius.circular(12)),
                       ),
                       filled: true,
                       fillColor: Colors.white,

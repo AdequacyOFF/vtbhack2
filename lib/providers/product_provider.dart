@@ -8,7 +8,6 @@ class ProductProvider with ChangeNotifier {
   final NotificationService _notificationService;
 
   Map<String, List<BankProduct>> _productsByBank = {};
-  final Map<String, List<BankProduct>> _previousProducts = {};
   bool _isLoading = false;
   String? _error;
 
