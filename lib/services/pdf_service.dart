@@ -4,7 +4,6 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../models/bank_account.dart';
 import '../models/transaction.dart';
 import '../config/api_config.dart';
@@ -146,7 +145,6 @@ class PdfService {
                             ? DateFormat('dd.MM.yy').format(date)
                             : '';
                         final isCredit = tx.isCredit;
-                        final amountStr = '${isCredit ? '+' : '-'}${tx.amount} ₽';
 
                         // Remove emojis from transaction info for PDF
                         final cleanInfo = (tx.transactionInformation ?? '')

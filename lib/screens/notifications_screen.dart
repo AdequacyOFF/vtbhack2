@@ -44,7 +44,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           }
 
           return ListView.builder(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.only(
+              left: 16,
+              right: 16,
+              top: 16,
+              bottom: 110, // Space for floating bottom bar
+            ),
             itemCount: notifications.length,
             itemBuilder: (context, index) {
               final notification = notifications[index];

@@ -28,7 +28,12 @@ class _ConsentManagementScreenState extends State<ConsentManagementScreen> {
         title: const Text('Управление согласиями'),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.only(
+          left: 16,
+          right: 16,
+          top: 16,
+          bottom: 110, // Space for floating bottom bar
+        ),
         children: [
           Card(
             child: Padding(

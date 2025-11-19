@@ -11,6 +11,7 @@ import 'providers/account_provider.dart';
 import 'providers/product_provider.dart';
 import 'providers/transfer_provider.dart';
 import 'providers/news_provider.dart';
+import 'providers/virtual_account_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/home_screen.dart';
 
@@ -77,6 +78,13 @@ class MyApp extends StatelessWidget {
         ),
         ChangeNotifierProvider<NewsProvider>(
           create: (_) => NewsProvider(),
+        ),
+        ChangeNotifierProxyProvider<NotificationService, VirtualAccountProvider>(
+          create: (context) => VirtualAccountProvider(
+            context.read<NotificationService>(),
+          ),
+          update: (context, notificationService, previous) =>
+          previous ?? VirtualAccountProvider(notificationService),
         ),
       ],
       child: MaterialApp(

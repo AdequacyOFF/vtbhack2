@@ -148,17 +148,23 @@ class AuthService {
   }
 
   Future<AccountConsent> getAccountConsent(String bankCode) async {
-    // Check if we have a valid approved consent
-    if (_accountConsents.containsKey(bankCode) && _accountConsents[bankCode]!.isApproved) {
-      return _accountConsents[bankCode]!;
+    // Check if we have any existing consent (approved OR pending)
+    if (_accountConsents.containsKey(bankCode)) {
+      final existingConsent = _accountConsents[bankCode]!;
+      // Return existing consent whether it's approved or pending
+      // This prevents duplicate consent creation
+      print('[AuthService] Returning existing consent for $bankCode - ID: ${existingConsent.consentId}, Status: ${existingConsent.status}, Approved: ${existingConsent.isApproved}');
+      return existingConsent;
     }
 
-    // Create new consent
+    // Create new consent only if none exists
     try {
+      print('[AuthService] No existing consent found for $bankCode, creating new one');
       final service = getBankService(bankCode);
       final consent = await service.createAccountConsent(clientId);
       _accountConsents[bankCode] = consent;
       await saveConsents();
+      print('[AuthService] Created consent for $bankCode - ID: ${consent.consentId}, Status: ${consent.status}');
       return consent;
     } catch (e) {
       // If consent creation fails, throw with more context
@@ -178,12 +184,16 @@ class AuthService {
   }
 
   Future<PaymentConsent> getPaymentConsent(String bankCode, String debtorAccount) async {
-    if (_paymentConsents.containsKey(bankCode) && _paymentConsents[bankCode]!.isApproved) {
-      return _paymentConsents[bankCode]!;
+    // Check if we have any existing consent (approved OR pending)
+    if (_paymentConsents.containsKey(bankCode)) {
+      final existingConsent = _paymentConsents[bankCode]!;
+      print('[AuthService] Returning existing payment consent for $bankCode: ${existingConsent.status}');
+      return existingConsent;
     }
 
-    // Create new consent
+    // Create new consent only if none exists
     try {
+      print('[AuthService] Creating new payment consent for $bankCode');
       final service = getBankService(bankCode);
       final consent = await service.createPaymentConsent(clientId, debtorAccount);
       _paymentConsents[bankCode] = consent;
@@ -206,12 +216,16 @@ class AuthService {
   }
 
   Future<ProductAgreementConsent> getProductConsent(String bankCode) async {
-    if (_productConsents.containsKey(bankCode) && _productConsents[bankCode]!.isApproved) {
-      return _productConsents[bankCode]!;
+    // Check if we have any existing consent (approved OR pending)
+    if (_productConsents.containsKey(bankCode)) {
+      final existingConsent = _productConsents[bankCode]!;
+      print('[AuthService] Returning existing product consent for $bankCode: ${existingConsent.status}');
+      return existingConsent;
     }
 
-    // Create new consent
+    // Create new consent only if none exists
     try {
+      print('[AuthService] Creating new product consent for $bankCode');
       final service = getBankService(bankCode);
       final consent = await service.createProductAgreementConsent(clientId);
       _productConsents[bankCode] = consent;
@@ -292,8 +306,12 @@ class AuthService {
     final results = <String, bool>{};
 
     for (final bankCode in supportedBanks) {
-      // Check if account consent exists and is approved
-      if (!hasRequiredConsents(bankCode)) {
+      // Check if account consent exists (even if pending)
+      final hasAccountConsent = _accountConsents.containsKey(bankCode);
+
+      if (!hasAccountConsent) {
+        // Only create consent if it doesn't exist at all
+        print('[AuthService] Creating missing consent for $bankCode');
         try {
           // Create account consent
           await recreateAccountConsent(bankCode);
@@ -303,14 +321,18 @@ class AuthService {
             await recreateProductConsent(bankCode);
           } catch (e) {
             // Product consent creation failed, but continue
+            print('[AuthService] Failed to create product consent for $bankCode: $e');
           }
 
           results[bankCode] = true;
         } catch (e) {
+          print('[AuthService] Failed to create account consent for $bankCode: $e');
           results[bankCode] = false;
         }
       } else {
-        // Consent already exists
+        // Consent already exists (approved or pending), don't recreate
+        final status = _accountConsents[bankCode]!.status;
+        print('[AuthService] Consent already exists for $bankCode with status: $status');
         results[bankCode] = true;
       }
     }
@@ -318,10 +340,12 @@ class AuthService {
     return results;
   }
 
-  /// Check if any consents are missing
+  /// Check if any consents are missing (not created at all)
   bool get hasMissingConsents {
     for (final bankCode in supportedBanks) {
-      if (!hasRequiredConsents(bankCode)) {
+      // A consent is "missing" only if it doesn't exist at all
+      // Pending consents are NOT missing, they're just awaiting approval
+      if (!_accountConsents.containsKey(bankCode)) {
         return true;
       }
     }

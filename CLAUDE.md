@@ -4,482 +4,297 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-**Multi-Bank Aggregation App** - A Flutter application that aggregates accounts from multiple banking services (VBank, ABank, SBank) through OpenBanking APIs. Built for VTB Hack 2025.
+Multi-bank aggregator Flutter application for VTB Hack 2025. Connects to 3 OpenBanking APIs (VBank, ABank, SBank) to aggregate accounts, create smart financial products, and provide personalized news based on spending patterns.
 
-### Key Features
-1. Multi-bank account aggregation across 3 banks
-2. Smart savings account creation (auto-selects best interest rates)
-3. Smart loan application (auto-selects lowest interest rates)
-4. Inter-bank and intra-bank transfers
-5. Smart payment selection (highest cashback)
-6. ATM locator with Yandex Maps integration
-7. PDF account statement generation
-8. Transaction analytics for ML export
-9. Consent management (auto and manual approval)
-10. **Automatic consent polling** - Detects when bank-side approvals complete (10s intervals)
-11. **In-app notifications** - Real-time user notifications with unread count badges
-
-### Tech Stack
-- Flutter SDK: ^3.9.2
-- State Management: Provider
-- API Client: HTTP & Dio
-- Maps: Yandex MapKit
-- PDF Generation: pdf + printing packages
-- Local Storage: shared_preferences
+**Tech Stack**: Flutter 3.9.2, Dart, Provider (state management), Yandex MapKit, PDF generation
 
 ## Development Commands
 
-### Running the Application
+### Installation & Setup
 ```bash
-# Install dependencies first
+# Install dependencies
 flutter pub get
 
-# Run on Android emulator/device
+# Run the app
 flutter run
 
-# Run with specific entry point
-flutter run lib/main.dart
-
-# Run in release mode
-flutter run --release
+# Run on specific device
+flutter run -d <device-id>
 ```
 
-### API Configuration
-The app uses credentials from `lib/config/api_config.dart`:
-- Client ID: `team201`
-- Client Secret: (configured in api_config.dart)
-- Bank URLs:
-  - VBank: https://vbank.open.bankingapi.ru
-  - ABank: https://abank.open.bankingapi.ru
-  - SBank: https://sbank.open.bankingapi.ru
-
-### Linting & Analysis
-```bash
-# Analyze code for issues
-flutter analyze
-
-# Check for outdated packages
-flutter pub outdated
-```
-
-### Testing
+### Testing & Analysis
 ```bash
 # Run all tests
 flutter test
 
-# Run with coverage
+# Run tests with coverage
 flutter test --coverage
 
-# Run a single test file
-flutter test test/widget_test.dart
+# Static analysis
+flutter analyze
+
+# Format code
+flutter format lib/
 ```
 
 ### Building
 ```bash
-# Build Android APK (debug)
+# Debug APK
 flutter build apk
 
-# Build Android APK (release)
+# Release APK
 flutter build apk --release
 
-# Build Android App Bundle
+# App Bundle for Google Play
 flutter build appbundle
 ```
 
-## Architecture
+### Debugging
+```bash
+# List available devices
+flutter devices
 
-### Directory Structure
-```
-lib/
-├── config/           # Configuration files (API, theme)
-├── models/           # Data models (BankAccount, Transaction, Product, Consent)
-├── services/         # Business logic services
-│   ├── auth_service.dart              # Authentication & consent management
-│   ├── bank_api_service.dart          # Banking API client
-│   ├── consent_polling_service.dart   # Auto-polls pending consent statuses
-│   ├── notification_service.dart      # In-app notification system
-│   ├── pdf_service.dart               # PDF generation
-│   └── analytics_service.dart         # Transaction analysis
-├── providers/        # State management providers
-│   ├── account_provider.dart      # Account aggregation state
-│   ├── product_provider.dart      # Products & best rate selection
-│   └── transfer_provider.dart     # Money transfer logic
-├── screens/          # UI screens
-│   ├── login_screen.dart
-│   ├── home_screen.dart                   # Dashboard with aggregated accounts
-│   ├── accounts_screen.dart               # Account details & transactions
-│   ├── products_screen.dart               # Deposits, loans, cards
-│   ├── transfer_screen.dart               # Inter-bank transfers
-│   ├── atm_map_screen.dart                # ATM locations on map
-│   ├── notifications_screen.dart          # In-app notifications center
-│   ├── consent_management_screen.dart     # Manual consent management
-│   └── profile_screen.dart                # User profile & settings
-└── main.dart         # App entry point
+# Run with verbose logging
+flutter run -v
+
+# Clear build cache (if encountering issues)
+flutter clean && flutter pub get
 ```
 
-### Key Components
+## Architecture & Key Concepts
 
-#### 1. Authentication Flow
-- User enters Client ID (format: `team201-10`)
-- System fetches bank tokens from all 3 banks
-- Creates consents for account access, payments, and product management
-- Stores tokens and consents in SharedPreferences
+### Service Layer Pattern
+The app follows a clean architecture with three main layers:
+- **Services**: Business logic and API communication (auth, bank API, consent polling, notifications)
+- **Providers**: State management using Provider pattern (account, product, transfer, news)
+- **Screens**: UI components
 
-#### 2. Account Aggregation
-`AccountProvider` fetches accounts from all banks **sequentially** (despite comments saying "parallel"):
+### Critical Implementation Details
+
+#### 1. Composite Balance Keys (`bankCode:accountId`)
+**IMPORTANT**: Accounts use composite keys to prevent ID collisions across banks.
+
 ```dart
-// Fetches accounts from vbank, abank, sbank sequentially
-// One bank failure doesn't break aggregation - errors stored in _consentErrors
-await accountProvider.fetchAllAccounts();
+// Correct way to access balances
+String balanceKey = '${account.bankCode}:${account.accountId}';
+double balance = balances[balanceKey];
+
+// Provider helper methods
+double balance = accountProvider.getBalance(account);
+double balance = accountProvider.getBalanceByIds(bankCode, accountId);
 ```
 
-**Balance Storage - Composite Key Pattern (CRITICAL)**:
-Balances use composite keys to prevent collision when same account ID exists across banks:
+**Why**: Different banks can return accounts with identical IDs. Using composite keys prevents data corruption.
+
+#### 2. Consent Management Lifecycle
+
+Three consent types per bank:
+- **Account Consent**: Access to accounts, balances, transactions
+- **Payment Consent**: VRP (Variable Recurring Payments) for transfers
+- **Product Agreement Consent**: Create/manage deposits, loans, cards
+
+**Auto-approval behavior**:
+- VBank & ABank: Auto-approved immediately
+- SBank: Requires manual approval on bank website
+
+**Status flow**:
+- `pending` / `AwaitingAuthorization` → Waiting for approval
+- `approved` / `active` / `Authorized` → Approved and usable
+- `rejected` → Denied
+
+#### 3. Consent Polling Service
+
+`ConsentPollingService` automatically polls for consent status updates:
+- Interval: Every 10 seconds
+- Max attempts: 120 (20 minutes total)
+- Auto-starts when pending consents exist
+- Auto-stops when all approved or max attempts reached
+
+**Usage in screens**:
 ```dart
-// Format: 'bankCode:accountId'
-Map<String, double> _balances = {
-  'vbank:12345': 1000.0,
-  'abank:12345': 2000.0,  // Different account despite same ID
-  'sbank:99999': 5000.0,
-};
+final pollingService = context.read<ConsentPollingService>();
 
-// Access methods
-String _getBalanceKey(String bankCode, String accountId) => '$bankCode:$accountId';
-double getBalance(BankAccount account) => _balances[_getBalanceKey(account.bankCode, account.accountId)] ?? 0.0;
-```
-
-**Why composite keys?** Same account IDs can exist across different banks. Without composite keys, balances overwrite each other.
-
-#### 3. Smart Product Selection
-`ProductProvider` compares products across banks:
-```dart
-// Get best deposit rate
-final bestDeposit = productProvider.getBestDeposit(amount: 50000);
-
-// Get best loan (lowest rate)
-final bestLoan = productProvider.getBestLoan(amount: 100000);
-```
-
-#### 4. Inter-Bank Transfers
-`TransferProvider` handles transfers with automatic consent:
-```dart
-await transferProvider.transferMoney(
-  fromAccount: account1,  // Can be from any bank
-  toAccount: account2,    // Can be to any bank
-  amount: 1000.0,
-);
-```
-
-#### 5. Consent Management
-Three types of consents:
-- **Account Consent**: Read accounts, balances, transactions
-- **Payment Consent**: VRP (Variable Recurring Payments)
-- **Product Agreement Consent**: Open/close products
-
-Banks handle consent differently:
-- VBank & ABank: Auto-approve
-- SBank: Requires manual user approval
-
-#### 6. Consent Polling Service
-`ConsentPollingService` automatically checks pending consent statuses:
-```dart
-// Polls every 10 seconds (max 20 minutes = 120 attempts)
-// Automatically starts when pending consents are detected
-// Triggers callbacks when consents are approved
+// Register callback for when consent approved
 pollingService.onConsentApproved((bankCode) {
-  // Handle approval notification
+  // Refresh accounts or show success message
 });
+
+// Start polling
+pollingService.startPolling();
 ```
 
-**Critical Implementation Details**:
-- **SBank uses `request_id`** instead of `consent_id` in responses
-- **Status checks require base team ID** in header: `x-fapi-interaction-id: team201` (NOT `team201-10`)
-- Code automatically extracts base team ID from full client ID
+#### 4. SBank API Quirks
 
-#### 7. Notification System
-`NotificationService` manages in-app notifications:
+SBank has different response formats:
+- Uses `request_id` instead of `consent_id` in initial response
+- When approved, consent ID changes from `req-*` to `consent-*`
+- Requires `x-fapi-interaction-id` header with base team ID (e.g., `team201` from `team201-10`)
+
+**Handled in**: `lib/services/bank_api_service.dart:330-406` (consent status checking)
+
+#### 5. Client ID Format
+
+- Format: `team<number>-<user_id>` (e.g., `team201-10`)
+- Base team ID: `team<number>` (e.g., `team201`)
+- Base team ID used for SBank's `x-fapi-interaction-id` header
+- Stored in `shared_preferences` for persistence
+
+#### 6. Automatic Data Loading
+
+When user logs in, the app automatically:
+1. Fetches bank tokens for all 3 banks
+2. Creates account consents (if missing)
+3. Loads all accounts from approved banks
+4. Fetches balances for each account
+5. Loads 365 days of transaction history
+6. Generates personalized news based on spending categories
+
+**Code**: `lib/providers/account_provider.dart:63-176` (fetchAllAccounts)
+
+#### 7. News Personalization
+
+ML service integration at `http://81.200.148.163:51000/news`:
+- Analyzes transaction categories from spending history
+- Sends top categories as topics
+- Receives personalized news articles with base64 images
+
+**Flow**: Transactions → Categories → ML Service → News Feed
+
+#### 8. MCC Code Transaction Categorization
+
+The app uses a **three-tier categorization system** for expense tracking:
+
+**Priority 1: MCC Codes** (Merchant Category Codes)
+- When transaction has `merchant.mccCode`, uses ISO 18245 standard mapping
+- Most reliable method - standardized across all banks
+- Example: MCC 5651 = "Family Clothing Stores" → Shopping category
+
+**Priority 2: Merchant Category**
+- Falls back to `merchant.category` from API if MCC unavailable
+- Maps API categories (e.g., "clothing", "restaurant") to app categories
+
+**Priority 3: Keyword Matching**
+- Final fallback: analyzes `transactionInformation` for keywords
+- Matches Russian and English terms in transaction descriptions
+
+**Implementation:**
+- `lib/models/merchant.dart`: Merchant data model with mccCode field
+- `lib/models/transaction.dart`: BankTransaction.category getter with 3-tier logic
+- `lib/services/mcc_category_service.dart`: MCC → Category mapping service
+- `mccCodes.txt`: Complete ISO 18245 MCC code reference (981 codes)
+
+**Category Mappings:**
+- Еда (Food): MCC 5411-5499, 5811-5815 (grocery, restaurants, fast food)
+- Транспорт (Transport): MCC 3000-3299, 3351-3441, 4111+, 5511-5599 (airlines, car rental, gas)
+- Покупки (Shopping): MCC 5200-5399, 5611-5699 (retail, clothing, department stores)
+- Развлечения (Entertainment): MCC 7800-7999 (movies, sports, recreation)
+- Здоровье (Health): MCC 5912, 5975-5977, 8011-8099 (pharmacies, doctors, hospitals)
+- Коммунальные услуги (Utilities): MCC 4812-4899, 4900 (telecom, utilities)
+- Образование (Education): MCC 5192, 5942-5943, 8211-8299 (books, schools)
+- Другое (Other): All other MCC codes
+
+**Debug Logging:**
+The expenses optimization service logs MCC codes and merchant data for each transaction:
+```
+[ExpensesOptimization] Transaction #1: 28519.78 ₽,
+  Category: "Покупки", MCC: "5651", Merchant: "Спортмастер"
+```
+
+## API Configuration
+
+### Base URLs
+- VBank: `https://vbank.open.bankingapi.ru`
+- ABank: `https://abank.open.bankingapi.ru`
+- SBank: `https://sbank.open.bankingapi.ru`
+
+### Authentication Headers
 ```dart
-// Add notification
-notificationService.addNotification(
-  title: 'Transfer Complete',
-  message: 'Successfully sent 1000 RUB',
-  type: NotificationType.success,
-);
-
-// Check unread count (displayed in UI badge)
-final unreadCount = notificationService.unreadCount;
+'Authorization': 'Bearer ${token.accessToken}'
+'x-consent-id': consentId  // For account/transaction endpoints
+'x-requesting-bank': ApiConfig.clientId  // Team ID (e.g., 'team201')
+'x-fapi-interaction-id': baseTeamId  // Base team ID for SBank status checks
 ```
 
-Consent refresh methods in `AuthService`:
-```dart
-// Refresh single consent type for a bank
-await authService.refreshAccountConsentStatus('sbank');
-await authService.refreshPaymentConsentStatus('sbank');
-await authService.refreshProductConsentStatus('sbank');
+### Retry Logic
 
-// Refresh all consents for a specific bank
-await authService.refreshAllConsentsForBank('sbank');
-
-// Refresh all consents for all banks
-await authService.refreshAllConsents();
-
-// Check consent status
-final hasPending = authService.hasPendingConsents;
-final pendingBanks = authService.banksWithPendingConsents;
-```
-
-### Banking API Integration
-
-#### Authentication
-```dart
-POST /auth/bank-token
-  ?client_id=team201
-  &client_secret=SECRET
-```
-
-#### Fetching Accounts
-```dart
-GET /accounts?client_id=team201-10
-Headers:
-  Authorization: Bearer TOKEN
-  x-consent-id: CONSENT_ID
-  x-requesting-bank: team201
-```
-
-#### Creating Payment
-```dart
-POST /payments?client_id=team201-10
-Headers:
-  Authorization: Bearer TOKEN
-  x-payment-consent-id: CONSENT_ID
-Body: {
-  "data": {
-    "initiation": {
-      "debtorAccount": { "identification": "..." },
-      "creditorAccount": {
-        "identification": "...",
-        "bank_code": "vbank"  // For inter-bank
-      }
-    }
-  }
-}
-```
-
-### State Management Pattern
-
-**Three-Tier Provider Architecture**:
-
-**Tier 1 - Singleton Services**:
-- `AuthService`: Token lifecycle, consent management, delegates to `BankApiService` instances (one per bank)
-- `NotificationService`: ChangeNotifier with reversed list (newest first), unread count tracking
-- `ConsentPollingService`: Auto-polls every 10s (max 120 attempts = 20 min), **must be disposed**
-
-**Tier 2 - Reactive Providers**:
-- `AccountProvider`: Manages accounts with composite key balances, receives both AuthService + NotificationService
-- `ProductProvider`: Fetches/compares products across banks
-- `TransferProvider`: Handles inter/intra-bank payments
-
-Using Provider with ChangeNotifierProxy:
-```dart
-MultiProvider(
-  providers: [
-    Provider<AuthService>(),
-    ChangeNotifierProvider<NotificationService>(),
-    ProxyProvider<AuthService, ConsentPollingService>(
-      dispose: (_, pollingService) => pollingService.dispose(),  // CRITICAL - prevents timer leaks
-    ),
-    ChangeNotifierProxyProvider<AuthService, AccountProvider>(
-      // Receives both AuthService AND NotificationService
-      create: (context) => AccountProvider(
-        context.read<AuthService>(),
-        context.read<NotificationService>(),
-      ),
-    ),
-    ChangeNotifierProxyProvider<AuthService, ProductProvider>(),
-    ChangeNotifierProxyProvider<AuthService, TransferProvider>(),
-  ],
-)
-```
-
-**Why ChangeNotifierProxyProvider?**
-- Providers recreate only when AuthService changes
-- Reuses previous instance if auth unchanged (performance optimization)
-- Prevents unnecessary widget rebuilds
-
-### UI Theme
-
-VTB-inspired design with:
-- Primary Blue: `#0028FF`
-- Dark Blue: `#002882`
-- Cards with rounded corners (16px)
-- Elevation and shadows for depth
-- Clean, modern layout
+All API calls in `BankApiService` use exponential backoff retry:
+- Max retries: 3
+- Initial delay: 2 seconds
+- Timeout per request: 30 seconds
+- Handles: `SocketException`, `TimeoutException`, `HttpException`
 
 ## Common Tasks
 
 ### Adding a New Bank
-1. Add bank code to `ApiConfig.supportedBanks`
-2. Add base URL to `ApiConfig`
-3. Update bank name mapping
-4. Add ATM locations in `atm_map_screen.dart`
+1. Add bank config to `lib/config/api_config.dart`
+2. Add to `supportedBanks` list in `AuthService`
+3. Update consent creation logic to handle bank-specific quirks
 
-### Adding New API Endpoint
-1. Add method to `BankApiService`
-2. Update corresponding Provider if needed
-3. Call from UI screen
+### Modifying Consent Logic
+- **Creation**: `lib/services/bank_api_service.dart:113-327`
+- **Status checking**: `lib/services/bank_api_service.dart:330-528`
+- **Storage/retrieval**: `lib/services/auth_service.dart`
+- **Polling**: `lib/services/consent_polling_service.dart`
 
-### Debugging API Issues
+### Working with Transactions
+- Transactions auto-load with accounts (365 days)
+- Categorization happens in `lib/services/analytics_service.dart`
+- Format: ISO 8601 strings, converted to DateTime for sorting/display
+
+### PDF Generation
+Uses `pdf` and `printing` packages:
+- **Service**: `lib/services/pdf_service.dart`
+- Generates statement with all accounts and transactions
+- Includes bank logos, transaction tables, summary stats
+
+## Known Issues & Limitations
+
+1. **Hardcoded ATM locations**: ATM map uses static coordinates for demo
+2. **3-bank limit**: Architecture supports exactly 3 banks (vbank, abank, sbank)
+3. **Cashback calculation**: Requires bank API support (not fully implemented)
+4. **Yandex Maps API key**: Stored in `api_config.dart`, update if expired
+5. **Scoped Storage**: Android 10+ requires special permissions for PDF saving
+
+## Important Files to Review
+
+- `lib/config/api_config.dart` - Team credentials, bank URLs, API keys
+- `lib/services/auth_service.dart` - Central auth & consent management
+- `lib/services/bank_api_service.dart` - All bank API calls with retry logic
+- `lib/services/consent_polling_service.dart` - Automatic consent approval polling
+- `lib/providers/account_provider.dart` - Account/balance/transaction state
+- `lib/main.dart` - App initialization and provider setup
+
+## Testing
+
+When testing consent flows:
+1. Clear app data to reset all consents: `flutter run --clear`
+2. For SBank testing, manually approve at bank portal (consent ID in logs)
+3. Check polling status with debug prints: `[ConsentPolling]` prefix
+4. Verify composite keys: `[bankCode:accountId]` format in balance maps
+
+## Error Handling Patterns
+
+### Consent Errors
 ```dart
-// Enable HTTP logging
-import 'package:dio/dio.dart';
-dio.interceptors.add(LogInterceptor(
-  requestBody: true,
-  responseBody: true,
-));
-```
-
-### Testing Consent Flow
-1. Login with client ID
-2. App auto-creates consents
-3. Polling starts automatically for pending consents
-4. For SBank, manual approval needed in bank UI
-5. Within 10 seconds of bank approval, app detects change
-6. Notification appears confirming approval
-
-### Adding Notifications to Features
-When implementing new features, integrate notifications:
-```dart
-final notificationService = context.read<NotificationService>();
-
-// On success
-notificationService.addNotification(
-  title: 'Success',
-  message: 'Operation completed',
-  type: NotificationType.success,
-);
-
-// On error
-notificationService.addNotification(
-  title: 'Error',
-  message: error.toString(),
-  type: NotificationType.error,
-);
-```
-
-### Handling Pending Consents (SBank)
-When consents require manual approval:
-1. Consent is created with status `pending` or `awaiting_authorization`
-2. User must visit bank website to approve consent
-3. After bank-side approval, use `refreshAccountConsentStatus(bankCode)` to update local status
-4. Check `authService.hasPendingConsents` to detect banks needing approval
-5. Get list with `authService.banksWithPendingConsents`
-
-## Important Notes
-
-- **Balance storage uses composite keys** (`'bankCode:accountId'`) to prevent collision
-- **Bank aggregation is sequential** (not parallel) - one failure doesn't break others
-- **Token lifetime: 24 hours** - auto-refreshed before each API call via `ensureValidToken()`
-- **Inter-bank transfers** require `bank_code` in creditor account
-- **PDF limits**: Max 10 accounts, 15 transactions per account (prevents crashes)
-- **Yandex Maps**: Requires API key initialization in `main.dart` before `runApp()`
-- **Asset changes**: Run `flutter clean && flutter pub get` to register new assets
-- **Consent polling**: Automatically detects bank-side approvals (10s intervals, 20 min max)
-
-### SBank API Quirks (Critical!)
-- **Uses `request_id` not `consent_id`**: Extract with fallback chain: `consent_id` → `consentId` → `request_id`
-- **Status check header**: Must send `x-fapi-interaction-id: team201` (base team ID, not `team201-10`)
-- **Code handles this automatically**: Extracts base ID from full client ID before API calls
-
-### Consent Status Management
-- Approved consent states: `approved` or `active`
-- Pending consent states: `pending` or `awaiting_authorization`
-- Use `refreshAccountConsentStatus(bankCode)` to poll consent status from bank
-- SBank requires manual approval - poll status after user approves on bank website
-- Consent IDs are extracted from both flat and nested response structures
-
-**Important: SBank uses `request_id` instead of `consent_id`**
-- SBank returns `request_id` field (e.g., "req-4de5076a2382") in consent creation responses
-- Other banks (VBank, ABank) return `consent_id`
-- The code handles both by checking: `consent_id` → `consentId` → `request_id`
-- The `request_id` is used for all subsequent status checks
-
-**Bank Response Format Variations**:
-```dart
-// Nested (VBank, ABank)
-{"data": {"consent_id": "cons-abc123", "status": "approved"}}
-
-// Flat (SBank sometimes)
-{"request_id": "req-4de5076a", "status": "pending"}
-
-// Code handles both with fallback parsing
-```
-
-### API Retry Mechanism
-- All bank API calls use exponential backoff retry (3 attempts by default)
-- Initial delay: 2 seconds, doubles on each retry (2s → 4s → 8s)
-- **Retries**: SocketException, TimeoutException, HttpException
-- **No retry**: Parse errors, validation errors (fail fast)
-- 30-second timeout per request
-- Max total wait: ~14 seconds for 3 retries
-
-```dart
-// Retry behavior
 try {
-  return await operation().timeout(Duration(seconds: 30));
-} on SocketException {
-  // Retry with exponential backoff
-} on TimeoutException {
-  // Retry with exponential backoff
-} on HttpException {
-  // Retry with exponential backoff
+  final consent = await authService.getAccountConsent(bankCode);
+  if (!consent.isApproved) {
+    // Handle pending/rejected state
+  }
 } catch (e) {
-  // Parse/validation errors - NO RETRY
-  rethrow;
+  if (e.toString().contains('CONSENT_REQUIRED')) {
+    // Create new consent
+  }
 }
 ```
 
-## Troubleshooting
+### Network Errors
+All handled automatically by `_executeWithRetry` in `BankApiService`. Throws after 3 failed attempts with exponential backoff.
 
-### Issue: "Consent not approved"
-**Solution**: Check if bank requires manual approval (SBank). For auto-approved banks, verify client_id format.
+## Code Style Notes
 
-### Issue: "Failed to fetch accounts"
-**Solution**: Ensure tokens are valid and consents exist. Call `authService.initialize()` on app start.
-
-### Issue: Maps not showing
-**Solution**: Verify Yandex Maps API key in `api_config.dart` and check Android permissions.
-
-### Issue: PDF generation fails
-**Solution**: Ensure storage permissions granted. Check Android API level for scoped storage.
-
-### Issue: SBank consent status check returns 400
-**Solution**: Verify the `x-fapi-interaction-id` header is using base team ID (`team201`), not full client ID (`team201-10`). Check console logs for "Base team ID for x-fapi-interaction-id" to confirm extraction.
-
-### Issue: SBank consent ID is empty
-**Solution**: Response likely contains `request_id` instead of `consent_id`. Check console logs for "Using request_id from SBank". Code should handle this automatically with fallback chain.
-
-### Issue: Consent polling doesn't detect approval
-**Solution**:
-1. Check console for polling logs (`[ConsentPolling] Poll attempt X/120`)
-2. Verify consent was approved on bank website
-3. Ensure polling service is started (check for `Starting polling for banks`)
-4. Manual trigger: Use "Check Status" button in Consent Management screen
-
-### Issue: Consent approved on bank website but app shows "pending"
-**Solution**: The app needs to poll the bank API to refresh consent status. Call `authService.refreshAccountConsentStatus(bankCode)` or `authService.refreshAllConsentsForBank(bankCode)` after user approves on bank website. Consider implementing periodic polling or a manual "Refresh" button in the UI.
-
-### Issue: Empty consent_id in response
-**Solution**: Check API response structure. The code handles both nested (`data.consent_id`) and flat (`consent_id`) structures. If consent_id is empty, the bank may not have returned it properly - check response body in logs.
-
-### Issue: Balances showing same value for different banks
-**Solution**: Check that composite key format is correct (`'bankCode:accountId'`). Verify `_getBalanceKey()` is used consistently. Check console logs for balance storage - keys should be like `'vbank:12345'` not just `'12345'`.
-
-### Issue: Assets not loading (e.g., atm_icon.png)
-**Solution**:
-1. Verify asset exists in `assets/` folder
-2. Check `pubspec.yaml` has `assets: - assets/` declared
-3. **Critical**: Run `flutter clean && flutter pub get` to register new assets
-4. Do full app restart (capital `R` in terminal, not hot reload)
-
-### Issue: Polling service not stopping/memory leak
-**Solution**: Ensure `ConsentPollingService` has `dispose()` called in provider setup. Check for `ProxyProvider` dispose callback in `main.dart`. Polling timer must be canceled on app exit.
+- Use underscore prefix for private members: `_balances`, `_fetchData()`
+- Prefer `debugPrint()` over `print()` for logging
+- Notification types: `success`, `info`, `warning`, `error`
+- Date format: ISO 8601 strings from API, convert to DateTime for display
+- Bank codes: Always lowercase (`vbank`, `abank`, `sbank`)

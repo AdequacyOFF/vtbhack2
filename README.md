@@ -1,197 +1,260 @@
-# Multi-Bank Aggregation App
+# Мультибанковое приложение
 
-A comprehensive Flutter mobile application for VTB Hack 2025 that aggregates banking accounts across multiple institutions and provides intelligent financial services.
+Комплексное мобильное приложение на Flutter для VTB Hack 2025, объединяющее банковские счета из нескольких банков и предоставляющее интеллектуальные финансовые сервисы.
 
-## Features
+## Основные возможности
 
-### 1. Multi-Bank Account Aggregation
-- Connects to **3 banks**: VBank, ABank, and SBank
-- Displays all accounts from all banks in a unified dashboard
-- Real-time balance updates
-- Transaction history for each account
+### 1. Агрегация счетов из нескольких банков
+- Подключение к **3 банкам**: VBank, ABank и SBank
+- Отображение всех счетов в едином интерфейсе
+- Автоматическое обновление балансов
+- История транзакций по каждому счету
+- Автоматическая загрузка данных за последние 365 дней
 
-### 2. Smart Product Selection
-**Savings Accounts:**
-- Automatically compares deposit interest rates across all banks
-- Recommends the bank with the best rate
-- Allows manual bank selection if desired
+### 2. Умные финансовые продукты
 
-**Loans:**
-- Compares loan interest rates across all banks
-- Automatically selects the bank with lowest rate
-- Supports manual override for bank selection
+**Умный вклад:**
+- Автоматическое сравнение процентных ставок по вкладам во всех банках
+- Рекомендация банка с лучшей ставкой
+- Возможность ручного выбора банка
 
-### 3. Universal Transfer System
-- Transfer money between any accounts (same bank or cross-bank)
-- Automatic consent management
-- Support for inter-bank transfers
-- Real-time payment status tracking
+**Умный кредит:**
+- Сравнение процентных ставок по кредитам во всех банках
+- Автоматический выбор банка с самой низкой ставкой
+- Поддержка ручного выбора банка
 
-### 4. Smart Payment Selection
-- Analyzes available payment accounts
-- Selects account with highest cashback for payments
-- Optimizes payment routing
+### 3. Универсальная система переводов
+- Переводы между любыми счетами (в рамках одного банка или между банками)
+- Автоматическое управление согласиями
+- Поддержка межбанковских переводов
+- Отслеживание статуса платежей в реальном времени
 
-### 5. ATM Locator
-- Integrated Yandex Maps showing all partner bank ATMs
-- Real-time location display for:
-  - VBank locations
-  - ABank locations
-  - SBank locations
+### 4. Умный выбор для оплаты
+- Анализ доступных счетов для оплаты
+- Выбор счета с максимальным кэшбэком
+- Оптимизация маршрутизации платежей
 
-### 6. Account Statement Generation
-- Generate comprehensive PDF statements
-- Includes all accounts and transactions
-- Export and share functionality
+### 5. Персонализированные новости
+- Анализ категорий ваших расходов
+- Подборка актуальных новостей на основе ваших интересов
+- Интеграция с ML-сервисом для персональных рекомендаций
+- Автоматическая загрузка при входе в приложение
 
-### 7. ML Analytics Export
-- Analyzes transaction patterns by category
-- Exports transaction frequency data
-- Prepares data for neural network analysis
-- Category-wise spending breakdown
+### 6. Поиск банкоматов
+- Интегрированная карта Yandex Maps со всеми банкоматами партнерских банков
+- Отображение локаций в реальном времени:
+  - Банкоматы VBank
+  - Банкоматы ABank
+  - Банкоматы SBank
 
-### 8. Social Media Integration (Placeholder)
-- Link social media accounts for easy transfers
-- Transfer money to friends by social media username
-- Requires both sender and receiver to link accounts
+### 7. Генерация выписок по счетам
+- Формирование подробных PDF-выписок
+- Включение всех счетов и транзакций
+- Функция экспорта и отправки
 
-### 9. Intelligent Consent Management
-- Automatic consent creation for all banks
-- Handles auto-approval (VBank, ABank)
-- Supports manual approval workflow (SBank)
-- Persistent consent storage
+### 8. Экспорт аналитики для ML
+- Анализ паттернов транзакций по категориям
+- Экспорт данных о частоте транзакций
+- Подготовка данных для анализа нейронными сетями
+- Разбивка расходов по категориям
 
-## Technical Stack
+### 9. Система уведомлений
+- Уведомления о новых транзакциях
+- Уведомления об изменении баланса
+- Статусы согласий и важные события
+- Счетчик непрочитанных уведомлений
 
-- **Framework**: Flutter 3.9.2
-- **Language**: Dart
-- **State Management**: Provider
-- **HTTP Client**: http + dio
-- **Maps**: Yandex MapKit
-- **PDF**: pdf + printing packages
-- **Storage**: shared_preferences
+### 10. Интеллектуальное управление согласиями
+- Автоматическое создание согласий для всех банков
+- Обработка авто-подтверждения (VBank, ABank)
+- Поддержка ручного подтверждения (SBank)
+- Автоматическая проверка статусов каждые 10 секунд
+- Постоянное хранение согласий
 
-## Architecture
+## Технологический стек
 
-### Clean Architecture Pattern
+- **Фреймворк**: Flutter 3.9.2
+- **Язык**: Dart
+- **Управление состоянием**: Provider
+- **HTTP-клиент**: http + dio
+- **Карты**: Yandex MapKit
+- **PDF**: pdf + printing
+- **Хранилище**: shared_preferences
+
+## Архитектура
+
+### Паттерн чистой архитектуры
 ```
 lib/
-├── config/          # Configuration (API endpoints, theme)
-├── models/          # Data models
-├── services/        # Business logic
-├── providers/       # State management
-├── screens/         # UI screens
-└── main.dart        # App entry point
+├── config/          # Конфигурация (API endpoints, тема)
+├── models/          # Модели данных
+│   ├── bank_account.dart
+│   ├── transaction.dart
+│   ├── product.dart
+│   ├── consent.dart
+│   ├── bank_token.dart
+│   └── news.dart
+├── services/        # Бизнес-логика
+│   ├── auth_service.dart
+│   ├── bank_api_service.dart
+│   ├── consent_polling_service.dart
+│   ├── notification_service.dart
+│   ├── pdf_service.dart
+│   ├── news_service.dart
+│   └── analytics_service.dart
+├── providers/       # Управление состоянием
+│   ├── account_provider.dart
+│   ├── product_provider.dart
+│   ├── transfer_provider.dart
+│   └── news_provider.dart
+├── screens/         # UI экраны
+│   ├── login_screen.dart
+│   ├── home_screen.dart
+│   ├── accounts_screen.dart
+│   ├── products_screen.dart
+│   ├── transfer_screen.dart
+│   ├── news_screen.dart
+│   ├── atm_map_screen.dart
+│   ├── notifications_screen.dart
+│   ├── consent_management_screen.dart
+│   └── profile_screen.dart
+└── main.dart        # Точка входа
 ```
 
-### Key Services
-- **AuthService**: Authentication & consent management
-- **BankApiService**: Banking API client for each bank
-- **PdfService**: Statement generation
-- **AnalyticsService**: Transaction analysis
+### Ключевые сервисы
+- **AuthService**: Аутентификация и управление согласиями
+- **BankApiService**: API-клиент для каждого банка
+- **ConsentPollingService**: Автоматическая проверка статусов согласий
+- **NotificationService**: Система уведомлений
+- **PdfService**: Генерация выписок
+- **NewsService**: Интеграция с ML-сервисом новостей
+- **AnalyticsService**: Анализ транзакций
 
-## Getting Started
+## Быстрый старт
 
-### Prerequisites
-- Flutter SDK 3.9.2 or higher
+### Требования
+- Flutter SDK 3.9.2 или выше
 - Android Studio / VS Code
-- Android device or emulator
+- Android-устройство или эмулятор
 
-### Installation
+### Установка
 
-1. **Clone the repository**
+1. **Клонирование репозитория**
 ```bash
 git clone <repository-url>
 cd vtbhack2
 ```
 
-2. **Install dependencies**
+2. **Установка зависимостей**
 ```bash
 flutter pub get
 ```
 
-3. **Configure API credentials**
-Edit `lib/config/api_config.dart` with your team credentials:
+3. **Настройка API учетных данных**
+Отредактируйте `lib/config/api_config.dart` с учетными данными вашей команды:
 ```dart
 static const String clientId = 'team201';
 static const String clientSecret = 'YOUR_SECRET';
 ```
 
-4. **Run the application**
+4. **Запуск приложения**
 ```bash
 flutter run
 ```
 
-### First Launch
+### Первый запуск
 
-1. Enter your Client ID (e.g., `team201-10`)
-2. App will automatically:
-   - Fetch bank tokens
-   - Create necessary consents
-   - Load accounts from all banks
+1. Введите Client ID (например, `team201-10`)
+2. Приложение автоматически:
+   - Получит токены банков
+   - Создаст необходимые согласия
+   - Загрузит счета из всех банков
+   - Загрузит историю транзакций
+   - Сформирует персонализированные новости
 
-## API Integration
+## Интеграция с API
 
-### Banking APIs
-The app integrates with three OpenBanking APIs:
+### Банковские API
+Приложение интегрируется с тремя OpenBanking API:
 - **VBank**: https://vbank.open.bankingapi.ru
 - **ABank**: https://abank.open.bankingapi.ru
 - **SBank**: https://sbank.open.bankingapi.ru
 
-### Authentication Flow
-1. Get bank token: `POST /auth/bank-token`
-2. Create consents: `POST /account-consents/request`
-3. Fetch accounts: `GET /accounts`
-4. Fetch balances: `GET /accounts/{id}/balances`
-5. Fetch transactions: `GET /accounts/{id}/transactions`
+### Последовательность аутентификации
+1. Получение токена банка: `POST /auth/bank-token`
+2. Создание согласий: `POST /account-consents/request`
+3. Получение счетов: `GET /accounts`
+4. Получение балансов: `GET /accounts/{id}/balances`
+5. Получение транзакций: `GET /accounts/{id}/transactions`
 
-### Key Headers
-- `Authorization`: Bearer token
-- `x-consent-id`: Consent identifier
-- `x-requesting-bank`: Team ID
+### Ключевые заголовки
+- `Authorization`: Bearer токен
+- `x-consent-id`: Идентификатор согласия
+- `x-requesting-bank`: ID команды
+- `x-fapi-interaction-id`: Базовый ID команды (для проверки статуса)
 
-## Features Implementation Status
+### ML-сервис новостей
+```
+POST http://81.200.148.163:51000/news
+Content-Type: application/json
 
-✅ Multi-bank account aggregation
-✅ Smart savings account creation
-✅ Smart loan application
-✅ Inter-bank transfers
-✅ ATM map integration
-✅ PDF statement generation
-✅ Transaction analytics for ML
-✅ Consent management
-⚠️ Social media linking (placeholder)
-⚠️ Smart cashback selection (placeholder)
-
-## UI Design
-
-The app features a VTB-inspired design:
-- Primary color: VTB Blue (#0028FF)
-- Clean, modern card-based layout
-- Intuitive navigation with bottom bar
-- Smooth animations and transitions
-
-## Screens
-
-1. **Login Screen**: Enter Client ID
-2. **Home/Dashboard**: View all accounts aggregated
-3. **Account Details**: View transactions for specific account
-4. **Products**: Browse deposits, loans, and cards
-5. **Transfer**: Send money between accounts
-6. **ATM Map**: Find nearby ATMs
-7. **Profile**: Export statements, analytics, settings
-
-## Testing
-
-```bash
-# Run all tests
-flutter test
-
-# Run with coverage
-flutter test --coverage
+{
+  "topics": ["food", "transport", "investments"],
+  "top_n": 10
+}
 ```
 
-## Building
+Возвращает массив новостных статей с заголовками, описаниями, изображениями в base64 и ссылками.
+
+## Статус реализации функций
+
+✅ Агрегация счетов из нескольких банков
+✅ Создание умных вкладов
+✅ Оформление умных кредитов
+✅ Межбанковские переводы
+✅ Интеграция карт с банкоматами
+✅ Генерация PDF-выписок
+✅ Аналитика транзакций для ML
+✅ Управление согласиями
+✅ Персонализированные новости
+✅ Система уведомлений
+✅ Автоматическая проверка статусов согласий
+
+## UI дизайн
+
+Приложение выполнено в стиле VTB:
+- Основной цвет: VTB Blue (#0028FF)
+- Чистый, современный дизайн на основе карточек
+- Интуитивная навигация с нижней панелью
+- Плавные анимации и переходы
+
+## Экраны
+
+1. **Экран входа**: Ввод Client ID
+2. **Главная/Dashboard**: Просмотр всех агрегированных счетов
+3. **Детали счета**: Просмотр транзакций по конкретному счету
+4. **Продукты**: Просмотр вкладов, кредитов и карт
+5. **Переводы**: Отправка денег между счетами
+6. **Новости**: Персонализированные новости на основе трат
+7. **Карта банкоматов**: Поиск ближайших банкоматов
+8. **Уведомления**: Центр уведомлений
+9. **Управление согласиями**: Ручное управление согласиями
+10. **Профиль**: Экспорт выписок, аналитика, настройки
+
+## Тестирование
+
+```bash
+# Запуск всех тестов
+flutter test
+
+# Запуск с покрытием кода
+flutter test --coverage
+
+# Анализ кода
+flutter analyze
+```
+
+## Сборка
 
 ```bash
 # Debug APK
@@ -200,45 +263,102 @@ flutter build apk
 # Release APK
 flutter build apk --release
 
-# App Bundle for Play Store
+# App Bundle для Google Play
 flutter build appbundle
 ```
 
-## Known Limitations
+## Особенности реализации
 
-1. Social media integration is a UI placeholder
-2. Cashback calculation requires bank API support
-3. ATM locations are hardcoded for demonstration
-4. Limited to 3 partner banks
+### Композитные ключи для балансов
+Приложение использует уникальный формат ключей `bankCode:accountId` для хранения балансов, что предотвращает коллизии между счетами с одинаковыми ID в разных банках.
 
-## News Aggregator
-Submodule that helps us build presonalized news based on transaction histroy  
-Repo: [news-aggregator](https://github.com/AdequacyOFF/news-aggregator.git)
+```dart
+Map<String, double> _balances = {
+  'vbank:12345': 1000.0,
+  'abank:12345': 2000.0,  // Разные счета, несмотря на одинаковые ID
+  'sbank:99999': 5000.0,
+};
+```
 
-## Future Enhancements
+### Автоматическая загрузка данных
+При входе в систему автоматически загружаются:
+1. Счета из всех банков
+2. Балансы по каждому счету
+3. История транзакций (365 дней)
+4. Персонализированные новости на основе категорий трат
 
-- Real-time notifications for transactions
-- Bill payment integration
-- Investment products
-- Multi-currency support
-- Biometric authentication
-- Dark mode
+### Управление согласиями
+Приложение автоматически создает три типа согласий:
+- **Account Consent** - доступ к счетам, балансам и транзакциям
+- **Payment Consent** - VRP для переводов
+- **Product Agreement Consent** - управление продуктами
 
-## Troubleshooting
+### Различия между банками
+- **VBank & ABank**: Автоматическое подтверждение согласий
+- **SBank**: Требуется ручное подтверждение на сайте банка
 
-**Issue**: Consents not approved
-**Solution**: Check if using correct client_id format (e.g., team201-10)
+### Автоматическая проверка статусов
+`ConsentPollingService` автоматически проверяет статусы ожидающих согласий:
+- Интервал проверки: каждые 10 секунд
+- Максимальное время ожидания: 20 минут (120 попыток)
+- При подтверждении на сайте банка статус обновляется автоматически
 
-**Issue**: Accounts not loading
-**Solution**: Verify internet connection and API endpoints
+### Статусы согласий
+- **Approved/Active/Authorized** - согласие одобрено
+- **Pending/AwaitingAuthorization** - ожидает подтверждения
+- **Rejected** - отклонено
 
-**Issue**: Maps not showing
-**Solution**: Check Yandex Maps API key and Android permissions
+### Особенности SBank
+- Использует `request_id` вместо `consent_id` в ответах
+- При подтверждении `consent_id` изменяется с `req-*` на `consent-*`
+- Требует заголовок `x-fapi-interaction-id` с базовым ID команды
 
-## License
+## Агрегатор новостей
 
-This project was created for VTB Hack 2025.
+Подмодуль, помогающий создавать персонализированные новости на основе истории транзакций.
+Репозиторий: [news-aggregator](https://github.com/AdequacyOFF/news-aggregator.git)
 
-## Contact
+## Известные ограничения
 
-For questions or issues, please contact the development team.
+1. Ограничение на 3 партнерских банка
+2. Локации банкоматов захардкожены для демонстрации
+3. Расчет кэшбэка требует поддержки банковского API
+
+## Устранение неполадок
+
+### Проблема: Согласия не подтверждаются
+**Решение**:
+- Проверьте правильность формата client_id (например, team201-10)
+- Для SBank требуется ручное подтверждение на сайте банка
+- Дождитесь автоматического обновления статуса (до 10 секунд)
+
+### Проблема: Счета не загружаются
+**Решение**:
+- Проверьте интернет-соединение
+- Убедитесь, что согласия подтверждены
+- Проверьте API endpoints в конфигурации
+
+### Проблема: Карты не отображаются
+**Решение**:
+- Проверьте API-ключ Yandex Maps
+- Убедитесь в наличии разрешений Android на геолокацию
+
+### Проблема: Ошибка генерации PDF
+**Решение**:
+- Проверьте разрешения на запись в хранилище
+- Убедитесь в наличии транзакций для выписки
+- Проверьте уровень Android API для Scoped Storage
+
+### Проблема: Новости не загружаются
+**Решение**:
+- Убедитесь, что есть история транзакций
+- Проверьте подключение к ML-сервису
+- Проверьте логи на наличие ошибок категоризации
+
+## Лицензия
+
+Этот проект создан для VTB Hack 2025.
+
+## Контакты
+
+По вопросам и проблемам обращайтесь к команде разработчиков.

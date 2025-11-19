@@ -3,20 +3,26 @@ import '../models/bank_account.dart';
 import '../models/transaction.dart';
 import '../services/auth_service.dart';
 import '../services/notification_service.dart';
+import 'virtual_account_provider.dart';
 
 class AccountProvider with ChangeNotifier {
   final AuthService _authService;
   final NotificationService _notificationService;
+  VirtualAccountProvider? _virtualAccountProvider;
 
   List<BankAccount> _accounts = [];
   Map<String, double> _balances = {};
   Map<String, List<BankTransaction>> _transactions = {};
-  final Map<String, double> _previousBalances = {};
 
   bool _isLoading = false;
   String? _error;
 
   AccountProvider(this._authService, this._notificationService);
+
+  /// Set virtual account provider for transaction processing
+  void setVirtualAccountProvider(VirtualAccountProvider provider) {
+    _virtualAccountProvider = provider;
+  }
 
   List<BankAccount> get accounts => _accounts;
   Map<String, double> get balances => _balances;
@@ -137,6 +143,45 @@ class AccountProvider with ChangeNotifier {
 
       _accounts = allAccounts;
       _balances = allBalances;
+
+      // Automatically fetch transactions for all accounts
+      debugPrint('[AccountProvider] Auto-fetching transactions for ${allAccounts.length} accounts');
+      for (final account in allAccounts) {
+        try {
+          final service = _authService.getBankService(account.bankCode);
+          final consent = await _authService.getAccountConsent(account.bankCode);
+
+          if (consent.isApproved) {
+            final previousTransactions = _transactions[account.accountId] ?? [];
+            final newTransactions = await service.getTransactions(
+              account.accountId,
+              consent.consentId,
+              fromDate: DateTime.now().subtract(const Duration(days: 365)).toIso8601String(),
+              toDate: DateTime.now().toIso8601String(),
+            );
+
+            _transactions[account.accountId] = newTransactions;
+            debugPrint('[AccountProvider] Loaded ${newTransactions.length} transactions for account ${account.accountId}');
+
+            // Check for new transactions
+            _checkNewTransactions(account, newTransactions, previousTransactions);
+
+            // Process transactions for virtual accounts
+            if (_virtualAccountProvider != null) {
+              await _virtualAccountProvider!.processTransactions(newTransactions);
+            }
+          }
+        } catch (e) {
+          debugPrint('Error auto-fetching transactions for ${account.accountId}: $e');
+          // Don't fail the whole operation if one account's transactions fail
+        }
+      }
+
+      // Calculate last month's income for virtual accounts budget
+      if (_virtualAccountProvider != null) {
+        await _virtualAccountProvider!.calculateLastMonthIncome(allTransactions);
+      }
+
       _isLoading = false;
       notifyListeners();
     } catch (e) {
@@ -172,9 +217,9 @@ class AccountProvider with ChangeNotifier {
 
   String _getBankName(String bankCode) {
     switch (bankCode) {
-      case 'vbank': return 'ВТБ';
-      case 'abank': return 'Альфа-Банк';
-      case 'sbank': return 'Сбербанк';
+      case 'vbank': return 'VBank';
+      case 'abank': return 'ABank';
+      case 'sbank': return 'SBank';
       default: return bankCode;
     }
   }
@@ -199,6 +244,11 @@ class AccountProvider with ChangeNotifier {
 
         // Проверяем новые транзакции
         _checkNewTransactions(account, newTransactions, previousTransactions);
+
+        // Process transactions for virtual accounts
+        if (_virtualAccountProvider != null) {
+          await _virtualAccountProvider!.processTransactions(newTransactions);
+        }
 
         notifyListeners();
       }
@@ -274,9 +324,9 @@ class AccountProvider with ChangeNotifier {
   }
 
   /// Refresh data
+  /// Note: fetchAllAccounts() now automatically loads transactions, so no need to call fetchAllTransactions() separately
   Future<void> refresh() async {
     await fetchAllAccounts();
-    await fetchAllTransactions();
   }
 
   void clearError() {
