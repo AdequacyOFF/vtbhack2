@@ -4,7 +4,6 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../providers/account_provider.dart';
 import '../services/pdf_service.dart';
-import '../services/analytics_service.dart';
 import '../config/app_theme.dart';
 import 'login_screen.dart';
 import 'consent_management_screen.dart';
