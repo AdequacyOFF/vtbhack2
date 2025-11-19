@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../services/auth_service.dart';
 import '../providers/account_provider.dart';
 import '../services/pdf_service.dart';
@@ -16,29 +17,16 @@ class ProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final authService = context.read<AuthService>();
 
-    // Пока не используем, но логика не мешает
-    final rawId = authService.clientId.trim();
-    final String initials;
-    if (rawId.isEmpty) {
-      initials = 'MB';
-    } else if (rawId.length == 1) {
-      initials = rawId.toUpperCase();
-    } else {
-      initials = rawId.substring(0, 2).toUpperCase();
-    }
-
     return Scaffold(
       body: ListView(
         padding: const EdgeInsets.only(
           left: 16,
           right: 16,
           top: 16,
-          bottom: 110, // Space for floating bottom bar
+          bottom: 110,
         ),
         children: [
           const SizedBox(height: 16),
-
-          // Profile Header - iOS 26 Glass Style
           Container(
             decoration: AppTheme.modernCardDecoration(
               gradient: AppTheme.primaryGradient,
@@ -48,14 +36,12 @@ class ProfileScreen extends StatelessWidget {
               padding: const EdgeInsets.all(28),
               child: Column(
                 children: [
-                  // ===== АВАТАРКА: стекло + градиент + AI-бейдж =====
                   SizedBox(
                     width: 120,
                     height: 120,
                     child: Stack(
                       alignment: Alignment.center,
                       children: [
-                        // Внешний градиентный круг
                         Container(
                           width: 120,
                           height: 120,
@@ -71,7 +57,6 @@ class ProfileScreen extends StatelessWidget {
                             ],
                           ),
                         ),
-                        // Внутренний стеклянный круг
                         Container(
                           width: 92,
                           height: 92,
@@ -87,7 +72,7 @@ class ProfileScreen extends StatelessWidget {
                             margin: const EdgeInsets.all(10),
                             decoration: BoxDecoration(
                               shape: BoxShape.circle,
-                              color: Colors.black.withOpacity(0.22),
+                              color: Colors.black.withValues(alpha: 0.22),
                             ),
                             child: const Center(
                               child: Icon(
@@ -98,7 +83,6 @@ class ProfileScreen extends StatelessWidget {
                             ),
                           ),
                         ),
-                        // Бейдж AI внизу справа
                         Positioned(
                           bottom: 6,
                           right: 10,
@@ -143,10 +127,7 @@ class ProfileScreen extends StatelessWidget {
                       ],
                     ),
                   ),
-
                   const SizedBox(height: 12),
-
-                  // Гринчек + "Подписка активирована" в одну строку
                   Row(
                     mainAxisSize: MainAxisSize.min,
                     children: const [
@@ -167,9 +148,7 @@ class ProfileScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-
                   const SizedBox(height: 16),
-
                   Text(
                     authService.clientId,
                     style: const TextStyle(
@@ -192,10 +171,7 @@ class ProfileScreen extends StatelessWidget {
               ),
             ),
           ),
-
           const SizedBox(height: 16),
-
-          // Actions
           _buildActionCard(
             context,
             icon: Icons.admin_panel_settings,
@@ -210,7 +186,6 @@ class ProfileScreen extends StatelessWidget {
               );
             },
           ),
-
           _buildActionCard(
             context,
             icon: Icons.picture_as_pdf,
@@ -218,8 +193,6 @@ class ProfileScreen extends StatelessWidget {
             subtitle: 'Создать PDF со всеми счетами и транзакциями',
             onTap: () => _generatePdf(context),
           ),
-
-          // Новая кнопка: выбор основного счёта
           _buildActionCard(
             context,
             icon: Icons.account_balance_wallet_outlined,
@@ -234,8 +207,6 @@ class ProfileScreen extends StatelessWidget {
               );
             },
           ),
-
-          // Новая кнопка: выбор интересующих категорий
           _buildActionCard(
             context,
             icon: Icons.auto_awesome_rounded,
@@ -250,7 +221,6 @@ class ProfileScreen extends StatelessWidget {
               );
             },
           ),
-
           _buildActionCard(
             context,
             icon: Icons.link,
@@ -262,7 +232,6 @@ class ProfileScreen extends StatelessWidget {
               );
             },
           ),
-
           _buildActionCard(
             context,
             icon: Icons.add_card,
@@ -274,10 +243,7 @@ class ProfileScreen extends StatelessWidget {
               );
             },
           ),
-
           const SizedBox(height: 16),
-
-          // Logout Button
           ElevatedButton(
             onPressed: () => _logout(context),
             style: ElevatedButton.styleFrom(
@@ -524,10 +490,6 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-// ===================================================================
-// 1) ЭКРАН ВЫБОРА ОСНОВНОГО СЧЁТА ДЛЯ СПИСАНИЯ
-// ===================================================================
-
 class PrimaryAccountSelectionScreen extends StatelessWidget {
   const PrimaryAccountSelectionScreen({super.key});
 
@@ -580,8 +542,6 @@ class PrimaryAccountSelectionScreen extends StatelessWidget {
                   color: Colors.white,
                 ),
               ),
-              // Подставь сюда реальные поля счёта (name/iban/bankName),
-              // если они есть в модели.
               title: Text(
                 account.toString(),
                 maxLines: 1,
@@ -615,10 +575,6 @@ class PrimaryAccountSelectionScreen extends StatelessWidget {
     );
   }
 }
-
-// ===================================================================
-// 2) ЭКРАН ВЫБОРА ИНТЕРЕСНЫХ КАТЕГОРИЙ
-// ===================================================================
 
 class _CategoryGroup {
   final String title;
@@ -762,9 +718,31 @@ class CategoryInterestsScreen extends StatefulWidget {
 
 class _CategoryInterestsScreenState extends State<CategoryInterestsScreen> {
   final Set<String> _selected = <String>{};
+  static const _prefsKey = 'selected_categories';
 
   int get _totalSubcategories =>
       _categoryGroups.fold<int>(0, (sum, g) => sum + g.subcategories.length);
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSelected();
+  }
+
+  Future<void> _loadSelected() async {
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList(_prefsKey) ?? <String>[];
+    setState(() {
+      _selected
+        ..clear()
+        ..addAll(saved);
+    });
+  }
+
+  Future<void> _saveSelected() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_prefsKey, _selected.toList());
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -779,7 +757,6 @@ class _CategoryInterestsScreenState extends State<CategoryInterestsScreen> {
           Expanded(
             child: CustomScrollView(
               slivers: [
-                // Верхний блок с описанием про ИИ
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
@@ -886,8 +863,6 @@ class _CategoryInterestsScreenState extends State<CategoryInterestsScreen> {
                     ),
                   ),
                 ),
-
-                // Список карточек с группами категорий
                 SliverPadding(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   sliver: SliverList(
@@ -991,8 +966,6 @@ class _CategoryInterestsScreenState extends State<CategoryInterestsScreen> {
               ],
             ),
           ),
-
-          // Нижняя кнопка "Готово" + маленький статус
           SafeArea(
             top: false,
             child: Padding(
@@ -1027,7 +1000,8 @@ class _CategoryInterestsScreenState extends State<CategoryInterestsScreen> {
                   ],
                   const SizedBox(height: 8),
                   ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
+                      await _saveSelected();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           behavior: SnackBarBehavior.floating,
