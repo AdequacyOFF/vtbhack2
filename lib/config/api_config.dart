@@ -1,7 +1,7 @@
 class ApiConfig {
   // Team credentials
   static const String clientId = 'team201';
-  static const String clientSecret = 'Kw214FKHYr8kb2v5kJxygcjM9T4fWCfq';
+  static const String clientSecret = 'wwYxgibWk0MFale9';
 
   // Bank base URLs
   static const String vbankBaseUrl = 'https://vbank.open.bankingapi.ru';

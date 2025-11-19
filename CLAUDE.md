@@ -65,8 +65,8 @@ flutter clean && flutter pub get
 
 ### Service Layer Pattern
 The app follows a clean architecture with three main layers:
-- **Services**: Business logic and API communication (auth, bank API, consent polling, notifications)
-- **Providers**: State management using Provider pattern (account, product, transfer, news)
+- **Services**: Business logic and API communication (auth, bank API, consent polling, notifications, expenses optimization)
+- **Providers**: State management using Provider pattern (account, product, transfer, news, virtual accounts)
 - **Screens**: UI components
 
 ### Critical Implementation Details
@@ -200,12 +200,74 @@ The expenses optimization service logs MCC codes and merchant data for each tran
   Category: "Покупки", MCC: "5651", Merchant: "Спортмастер"
 ```
 
+#### 9. Virtual Accounts & Expense Budgeting
+
+**Virtual Accounts** allow users to create budget categories and track spending against allocated amounts:
+- **Create virtual accounts** for different expense categories (e.g., "Food Budget", "Transportation")
+- **Allocate monthly amounts** to each virtual account
+- **Track spending** by assigning real transactions to virtual accounts
+- **Monitor remaining balance** in each budget category
+- **Calculate potential earnings**: Last month's income minus total allocated budget
+
+**Key Calculations:**
+```dart
+totalAllocated = sum of all virtual account allocations
+totalSpent = sum of all assigned transaction amounts
+totalRemaining = sum of remaining balances in each account
+potentialEarnings = lastMonthIncome - totalAllocated
+```
+
+**Implementation:**
+- `lib/providers/virtual_account_provider.dart`: State management for virtual accounts
+- `lib/models/virtual_account.dart`: Virtual account data model
+- Virtual accounts persisted to `shared_preferences`
+- Income auto-calculated from previous month's credit transactions
+
+#### 10. Expenses Optimization & ML Advice
+
+**ExpensesOptimizationService** provides AI-powered spending advice via ML service:
+- **Endpoint**: `http://81.200.148.163:51000/advice`
+- **Analyzes last 30 days** of spending by category
+- **Sends spending data** + income to ML service
+- **Receives personalized advice** on how to optimize expenses
+
+**Request format:**
+```json
+{
+  "spending": {
+    "food": 15000.50,
+    "transport": 3000.00,
+    "shopping": 8500.00,
+    ...
+  },
+  "income": 75000.00
+}
+```
+
+**Response:** Array of advice objects with categories and recommendations
+
+**Category mapping (English ↔ Russian):**
+- food ↔ Еда
+- transport ↔ Транспорт
+- shopping ↔ Покупки
+- entertainment ↔ Развлечения
+- health ↔ Здоровье
+- utilities ↔ Коммунальные услуги
+- education ↔ Образование
+- other ↔ Другое
+
+**Flow**: Transactions → MCC Categorization → Monthly Aggregation → ML Service → Advice Display
+
 ## API Configuration
 
-### Base URLs
+### Bank API Base URLs
 - VBank: `https://vbank.open.bankingapi.ru`
 - ABank: `https://abank.open.bankingapi.ru`
 - SBank: `https://sbank.open.bankingapi.ru`
+
+### ML Service Endpoints
+- News Personalization: `http://81.200.148.163:51000/news`
+- Expenses Optimization: `http://81.200.148.163:51000/advice`
 
 ### Authentication Headers
 ```dart
@@ -261,7 +323,10 @@ Uses `pdf` and `printing` packages:
 - `lib/services/auth_service.dart` - Central auth & consent management
 - `lib/services/bank_api_service.dart` - All bank API calls with retry logic
 - `lib/services/consent_polling_service.dart` - Automatic consent approval polling
+- `lib/services/expenses_optimization_service.dart` - ML-powered spending advice
+- `lib/services/mcc_category_service.dart` - MCC code to category mapping
 - `lib/providers/account_provider.dart` - Account/balance/transaction state
+- `lib/providers/virtual_account_provider.dart` - Virtual budgeting accounts
 - `lib/main.dart` - App initialization and provider setup
 
 ## Testing
