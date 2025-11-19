@@ -435,29 +435,6 @@ class ProfileScreen extends StatelessWidget {
     }
   }
 
-  void _exportForML(BuildContext context) {
-    final accountProvider = context.read<AccountProvider>();
-    final allTransactions = accountProvider.allTransactions;
-
-    final mlData = AnalyticsService.exportForML(allTransactions);
-
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Данные для ML'),
-        content: SingleChildScrollView(
-          child: Text(mlData.toString()),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Закрыть'),
-          ),
-        ],
-      ),
-    );
-  }
-
   Future<void> _logout(BuildContext context) async {
     final confirmed = await showDialog<bool>(
       context: context,
