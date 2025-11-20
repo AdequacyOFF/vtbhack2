@@ -9,7 +9,7 @@ import '../config/api_config.dart';
 
 final Map<String, List<Point>> atmLocations = {
   'vbank': [
-    const Point(latitude: 55.7558, longitude: 37.6173), // Red Square area
+    const Point(latitude: 55.7558, longitude: 37.6173),
     const Point(latitude: 55.7522, longitude: 37.6156),
     const Point(latitude: 55.7514, longitude: 37.6198),
   ],

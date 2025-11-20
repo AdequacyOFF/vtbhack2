@@ -442,14 +442,17 @@ class _ExpensesOptimizationScreenState extends State<ExpensesOptimizationScreen>
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
-              color: isPositive ? Colors.green[900] : Colors.red[900],
+          Expanded(
+            child: Text(
+              title,
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: isPositive ? Colors.green[900] : Colors.red[900],
+              ),
             ),
           ),
+          const SizedBox(width: 8),
           Text(
             '${balance.toStringAsFixed(2)} ₽',
             style: TextStyle(

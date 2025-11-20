@@ -25,7 +25,7 @@ class ApiConfig {
 
   // Bank consent auto-approval
   static const Map<String, bool> bankAutoApproval = {
-    'vbank': true,
+    'vbank': false,
     'abank': true,
     'sbank': false, // Requires manual approval
   };
