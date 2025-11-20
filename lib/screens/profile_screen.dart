@@ -5,6 +5,7 @@ import '../services/auth_service.dart';
 import '../providers/account_provider.dart';
 import '../services/pdf_service.dart';
 import '../config/app_theme.dart';
+import '../config/api_config.dart';
 import 'login_screen.dart';
 import 'consent_management_screen.dart';
 import 'pdf_viewer_screen.dart';
@@ -466,13 +467,135 @@ class ProfileScreen extends StatelessWidget {
   }
 }
 
-class PrimaryAccountSelectionScreen extends StatelessWidget {
+class PrimaryAccountSelectionScreen extends StatefulWidget {
   const PrimaryAccountSelectionScreen({super.key});
+
+  @override
+  State<PrimaryAccountSelectionScreen> createState() =>
+      _PrimaryAccountSelectionScreenState();
+}
+
+class _PrimaryAccountSelectionScreenState
+    extends State<PrimaryAccountSelectionScreen> {
+  static const _globalPrefsKey = 'primary_account_global';
+  static const _bankPrefsPrefix = 'primary_account_bank_';
+
+  final Map<String, int> _selectedIndexByBank = {};
+  String? _globalBankCode;
+  int? _globalAccountIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSelections();
+  }
+
+  Future<void> _loadSelections() async {
+    final prefs = await SharedPreferences.getInstance();
+    final global = prefs.getString(_globalPrefsKey);
+    String? bankCode;
+    int? accountIndex;
+
+    if (global != null) {
+      final parts = global.split('|');
+      if (parts.length == 2) {
+        bankCode = parts[0];
+        accountIndex = int.tryParse(parts[1]);
+      }
+    }
+
+    final selectedByBank = <String, int>{};
+    for (final key in prefs.getKeys()) {
+      if (key.startsWith(_bankPrefsPrefix)) {
+        final code = key.substring(_bankPrefsPrefix.length);
+        final idx = prefs.getInt(key);
+        if (idx != null) {
+          selectedByBank[code] = idx;
+        }
+      }
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _globalBankCode = bankCode;
+      _globalAccountIndex = accountIndex;
+      _selectedIndexByBank
+        ..clear()
+        ..addAll(selectedByBank);
+    });
+  }
+
+  Future<void> _saveForBank(String bankCode, int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('$_bankPrefsPrefix$bankCode', index);
+    await prefs.setString(_globalPrefsKey, '$bankCode|$index');
+
+    if (!mounted) return;
+
+    setState(() {
+      _selectedIndexByBank[bankCode] = index;
+      _globalBankCode = bankCode;
+      _globalAccountIndex = index;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Основной счёт успешно обновлён'),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     final accountProvider = context.watch<AccountProvider>();
-    final accounts = accountProvider.accounts;
+    final accountsByBank = accountProvider.accountsByBank;
+
+    final hasAccounts =
+        accountsByBank.isNotEmpty && accountsByBank.values.any((l) => l.isNotEmpty);
+
+    if (!hasAccounts) {
+      return Scaffold(
+        appBar: AppBar(
+          title: const Text('Основной счёт'),
+          backgroundColor: AppTheme.primaryBlue,
+          elevation: 0,
+        ),
+        body: const Center(
+          child: Text(
+            'Счета не найдены',
+            style: TextStyle(
+              fontSize: 14,
+              color: AppTheme.textSecondary,
+            ),
+          ),
+        ),
+      );
+    }
+
+    dynamic primaryAccount;
+    String? primaryBankCode;
+
+    if (_globalBankCode != null && _globalAccountIndex != null) {
+      final list = accountsByBank[_globalBankCode];
+      if (list != null &&
+          _globalAccountIndex! >= 0 &&
+          _globalAccountIndex! < list.length) {
+        primaryAccount = list[_globalAccountIndex!];
+        primaryBankCode = _globalBankCode;
+      }
+    }
+
+    if (primaryAccount == null) {
+      final firstEntry = accountsByBank.entries.firstWhere(
+            (e) => e.value.isNotEmpty,
+      );
+      primaryAccount = firstEntry.value.first;
+      primaryBankCode = firstEntry.key;
+    }
+
+    final primaryBalance =
+    primaryAccount != null ? accountProvider.getBalance(primaryAccount) : 0.0;
 
     return Scaffold(
       appBar: AppBar(
@@ -480,73 +603,304 @@ class PrimaryAccountSelectionScreen extends StatelessWidget {
         backgroundColor: AppTheme.primaryBlue,
         elevation: 0,
       ),
-      body: accounts.isEmpty
-          ? const Center(
-        child: Text(
-          'Счета не найдены',
-          style: TextStyle(
-            fontSize: 14,
-            color: AppTheme.textSecondary,
-          ),
-        ),
-      )
-          : ListView.separated(
+      body: ListView(
         padding: const EdgeInsets.all(16),
-        itemCount: accounts.length,
-        separatorBuilder: (_, __) => const SizedBox(height: 12),
-        itemBuilder: (context, index) {
-          final account = accounts[index];
-
-          return Container(
+        children: [
+          Container(
+            margin: const EdgeInsets.only(bottom: 16),
             decoration: AppTheme.modernCardDecoration(
-              borderRadius: 20,
+              gradient: AppTheme.primaryGradient,
+              borderRadius: 24,
             ),
-            child: ListTile(
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
-                vertical: 8,
-              ),
-              leading: Container(
-                width: 40,
-                height: 40,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  gradient: AppTheme.accentGradient,
-                ),
-                child: const Icon(
-                  Icons.account_balance_wallet_rounded,
-                  color: Colors.white,
-                ),
-              ),
-              title: Text(
-                account.toString(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textPrimary,
-                ),
-              ),
-              subtitle: const Text(
-                'Нажмите, чтобы сделать основным',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.textSecondary,
-                ),
-              ),
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text(
-                      'Логика выбора будет добавлена позже',
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.white.withValues(alpha: 0.18),
+                    ),
+                    child: const Icon(
+                      Icons.star_rounded,
+                      color: Colors.white,
+                      size: 26,
                     ),
                   ),
-                );
-              },
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            const Text(
+                              'Текущий основной счёт',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                                vertical: 3,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(999),
+                                color: Colors.white.withValues(alpha: 0.18),
+                              ),
+                              child: const Text(
+                                'по умолчанию',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                  letterSpacing: 0.2,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          primaryAccount != null
+                              ? primaryAccount.displayName
+                              : 'Не выбран',
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        if (primaryAccount != null)
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  ApiConfig.getBankName(primaryBankCode ?? ''),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: Colors.white.withValues(alpha: 0.9),
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${primaryBalance.toStringAsFixed(2)} ${primaryAccount.currency}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-          );
-        },
+          ),
+          ...accountsByBank.entries.map((entry) {
+            final bankCode = entry.key;
+            final bankAccounts = entry.value;
+            if (bankAccounts.isEmpty) {
+              return const SizedBox.shrink();
+            }
+
+            int savedIndex = _selectedIndexByBank[bankCode] ?? 0;
+            if (savedIndex < 0 || savedIndex >= bankAccounts.length) {
+              savedIndex = 0;
+            }
+
+            final currentAccount = bankAccounts[savedIndex];
+            final currentBalance = accountProvider.getBalance(currentAccount);
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 14),
+              decoration: AppTheme.modernCardDecoration(
+                borderRadius: 20,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 32,
+                          height: 32,
+                          decoration: BoxDecoration(
+                            color: AppTheme.primaryBlue.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(
+                            Icons.account_balance_rounded,
+                            size: 18,
+                            color: AppTheme.primaryBlue,
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            ApiConfig.getBankName(bankCode),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    LayoutBuilder(
+                      builder: (context, constraints) {
+                        return DropdownButtonFormField<int>(
+                          value: savedIndex,
+                          isExpanded: true,
+                          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppTheme.textPrimary,
+                          ),
+                          dropdownColor: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          decoration: InputDecoration(
+                            labelText: 'Счёт для списания',
+                            labelStyle: const TextStyle(
+                              fontSize: 13,
+                              color: AppTheme.textSecondary,
+                            ),
+                            filled: true,
+                            fillColor: Colors.white,
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 10,
+                            ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: AppTheme.primaryBlue
+                                    .withValues(alpha: 0.25),
+                                width: 1,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(14),
+                              borderSide: BorderSide(
+                                color: AppTheme.primaryBlue
+                                    .withValues(alpha: 0.18),
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                          items: List.generate(bankAccounts.length, (index) {
+                            final acc = bankAccounts[index];
+                            final balance = accountProvider.getBalance(acc);
+                            return DropdownMenuItem<int>(
+                              value: index,
+                              child: ConstrainedBox(
+                                constraints: BoxConstraints(
+                                  maxWidth: constraints.maxWidth - 32,
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      acc.displayName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w600,
+                                        color: AppTheme.textPrimary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${balance.toStringAsFixed(2)} ${acc.currency}',
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontSize: 12,
+                                        color: AppTheme.textSecondary,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          }),
+                          onChanged: (value) {
+                            if (value == null) return;
+                            setState(() {
+                              _selectedIndexByBank[bankCode] = value;
+                            });
+                          },
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Сейчас: ${currentAccount.displayName}',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final index =
+                              _selectedIndexByBank[bankCode] ?? savedIndex;
+                          _saveForBank(bankCode, index);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primaryBlue,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                        ),
+                        child: const Text(
+                          'Сохранить',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ],
       ),
     );
   }
@@ -910,8 +1264,7 @@ class _CategoryInterestsScreenState extends State<CategoryInterestsScreen> {
                                                 style: const TextStyle(
                                                   fontSize: 12,
                                                   fontWeight: FontWeight.w600,
-                                                  color:
-                                                  AppTheme.primaryBlue,
+                                                  color: AppTheme.primaryBlue,
                                                 ),
                                               ),
                                             ],
@@ -1061,9 +1414,7 @@ class _CategoryInterestsScreenState extends State<CategoryInterestsScreen> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(999),
           gradient: isSelected ? AppTheme.accentGradient : null,
-          color: isSelected
-              ? null
-              : Colors.white.withValues(alpha: 0.06),
+          color: isSelected ? null : Colors.white.withValues(alpha: 0.06),
           border: Border.all(
             color: isSelected
                 ? Colors.transparent
