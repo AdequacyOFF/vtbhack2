@@ -261,28 +261,46 @@ potentialEarnings = lastMonthIncome - totalAllocated
 #### 10. Expenses Optimization & ML Advice
 
 **ExpensesOptimizationService** provides AI-powered spending advice via ML service:
-- **Endpoint**: `http://81.200.148.163:51000/advice`
+- **Endpoint**: `http://5.129.212.83:51000/advice`
 - **Analyzes last 30 days** of spending by category
-- **Sends spending data** + income to ML service
-- **Receives personalized advice** on how to optimize expenses
+- **Sends spending data** + income + user wishes to ML service
+- **Receives personalized advice** on how to optimize expenses with AI justification
 
 **Request format:**
 ```json
 {
-  "spending": {
-    "food": 15000.50,
+  "earnings": 100000,
+  "wastes": {
+    "meal": 15000.50,
     "transport": 3000.00,
     "shopping": 8500.00,
     ...
   },
-  "income": 75000.00
+  "wishes": "хочу денег"
 }
 ```
 
-**Response:** Array of advice objects with categories and recommendations
+**Response format:**
+```json
+{
+  "earnings": 100000,
+  "wastes": {
+    "meal": 12000.00,
+    "transport": 2500.00,
+    "shopping": 7000.00,
+    ...
+  },
+  "comment": "Пользователь хочет больше денег, что означает необходимость сократить расходы. Снижены траты на рестораны и транспорт, что позволяет сохранить часть дохода."
+}
+```
+
+**Key Features:**
+- **User Wishes Input**: Free-form text field for user preferences (e.g., "хочу накопить на отпуск")
+- **AI Justification**: The `comment` field contains detailed neural network explanation
+- **Expandable UI**: Comment displayed in expandable card with brain icon (🧠) for optional reading
 
 **Category mapping (English ↔ Russian):**
-- food ↔ Еда
+- meal ↔ Еда
 - transport ↔ Транспорт
 - shopping ↔ Покупки
 - entertainment ↔ Развлечения
@@ -291,7 +309,7 @@ potentialEarnings = lastMonthIncome - totalAllocated
 - education ↔ Образование
 - other ↔ Другое
 
-**Flow**: Transactions → MCC Categorization → Monthly Aggregation → ML Service → Advice Display
+**Flow**: Transactions → MCC Categorization → Monthly Aggregation + User Wishes → ML Service → Optimized Budget + AI Comment → Display with Expandable Justification
 
 #### 11. News Personalization Service
 
@@ -389,8 +407,8 @@ final validDeposits = babankDeposits.where((p) {
 - Best ADOFF Bank: `https://bank.ad-off.digital`
 
 ### ML Service Endpoints
-- News Personalization: `http://81.200.148.163:51000/news`
-- Expenses Optimization: `http://81.200.148.163:51000/advice`
+- News Personalization: `http://5.129.212.83:51000/news`
+- Expenses Optimization: `http://5.129.212.83:51000/advice`
 
 ### Authentication Headers
 ```dart

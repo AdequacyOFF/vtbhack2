@@ -24,6 +24,7 @@ class _ExpensesOptimizationScreenState extends State<ExpensesOptimizationScreen>
   Map<String, double>? _optimizedSpending;
   double _currentIncome = 0.0;
   double _optimizedIncome = 0.0;
+  String? _aiComment;
   bool _isLoading = false;
   bool _hasOptimization = false;
   bool _isCreatingDeposit = false;
@@ -74,6 +75,7 @@ class _ExpensesOptimizationScreenState extends State<ExpensesOptimizationScreen>
       setState(() {
         _optimizedSpending = result['wastes'] as Map<String, double>;
         _optimizedIncome = result['earnings'] as double;
+        _aiComment = result['comment'] as String?;
         _hasOptimization = true;
         _isLoading = false;
       });
@@ -368,6 +370,12 @@ class _ExpensesOptimizationScreenState extends State<ExpensesOptimizationScreen>
                       _optimizedIncome - _getTotalSpending(_optimizedSpending!),
                     ),
                     const SizedBox(height: 16),
+
+                    // AI Comment/Justification
+                    if (_aiComment != null && _aiComment!.isNotEmpty)
+                      _buildAICommentCard(),
+                    if (_aiComment != null && _aiComment!.isNotEmpty)
+                      const SizedBox(height: 16),
 
                     // Comparison card
                     _buildComparisonCard(),
@@ -674,6 +682,68 @@ class _ExpensesOptimizationScreenState extends State<ExpensesOptimizationScreen>
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAICommentCard() {
+    if (_aiComment == null || _aiComment!.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Theme(
+        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+        child: ExpansionTile(
+          leading: const Icon(
+            Icons.psychology,
+            color: AppTheme.primaryBlue,
+            size: 28,
+          ),
+          title: const Text(
+            'Обоснование нейросети',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: AppTheme.darkBlue,
+            ),
+          ),
+          subtitle: const Text(
+            'Нажмите, чтобы прочитать подробное объяснение',
+            style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+          childrenPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+          expandedCrossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: AppTheme.primaryBlue.withValues(alpha: 0.05),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                _aiComment!,
+                style: const TextStyle(
+                  fontSize: 14,
+                  height: 1.6,
+                  color: AppTheme.darkBlue,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
