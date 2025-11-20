@@ -65,11 +65,46 @@ flutter clean && flutter pub get
 
 ### Service Layer Pattern
 The app follows a clean architecture with three main layers:
-- **Services**: Business logic and API communication (auth, bank API, consent polling, notifications, expenses optimization)
+- **Services**: Business logic and API communication (auth, bank API, consent polling, notifications, expenses optimization, **secure storage**)
 - **Providers**: State management using Provider pattern (account, product, transfer, news, virtual accounts)
 - **Screens**: UI components
 
 ### Critical Implementation Details
+
+#### 0. Secure Storage for Sensitive Data
+**CRITICAL SECURITY**: All sensitive authentication data is encrypted at rest using `flutter_secure_storage`.
+
+**Implementation** (`lib/services/secure_storage_service.dart`):
+- Uses platform-specific hardware-backed encryption
+- Android: KeyStore with EncryptedSharedPreferences
+- iOS: Keychain with `first_unlock` accessibility
+
+**Protected Data**:
+- Bank access tokens (OAuth bearer tokens)
+- Bank refresh tokens
+- Account/Payment/Product consent IDs
+- Client identification credentials
+
+**Usage**:
+```dart
+final secureStorage = SecureStorageService();
+
+// Save encrypted data
+await secureStorage.saveTokens(tokensJson);
+await secureStorage.saveClientId(clientId);
+
+// Read encrypted data
+final tokens = await secureStorage.readTokens();
+final clientId = await secureStorage.readClientId();
+
+// Secure deletion
+await secureStorage.clearAllAuthData();
+```
+
+**IMPORTANT**:
+- `AuthService` uses `SecureStorageService` for ALL token and consent storage
+- Never store tokens or credentials in plain `SharedPreferences`
+- News preferences (likes/dislikes) remain in SharedPreferences as they're non-sensitive
 
 #### 1. Composite Balance Keys (`bankCode:accountId`)
 **IMPORTANT**: Accounts use composite keys to prevent ID collisions across banks.
@@ -258,7 +293,56 @@ potentialEarnings = lastMonthIncome - totalAllocated
 
 **Flow**: Transactions → MCC Categorization → Monthly Aggregation → ML Service → Advice Display
 
-#### 11. One-Click Deposit Creation (Best ADOFF Bank Integration)
+#### 11. News Personalization Service
+
+**UPDATED API** (`http://5.129.212.83:51000/news`):
+- Endpoint changed from old URL to new server
+- Request format updated to new API specification
+
+**Request format:**
+```json
+{
+  "n": 3,
+  "top_spend_categories": ["рестораны", "транспорт"],
+  "disliked_titles": ["война"]
+}
+```
+
+**Response format:**
+```json
+[
+  {
+    "source": "Финам",
+    "title": "News title",
+    "content": "Full article content",
+    "original_url": "https://...",
+    "image_base64": null
+  }
+]
+```
+
+**Key Features**:
+- **Like/Dislike System**: Users can like (👍) or dislike (👎) news articles
+- **Disliked Articles**: Automatically hidden and excluded from future requests
+- **Persistence**: Liked/disliked titles saved in `SharedPreferences` (non-sensitive data)
+- **Automatic Filtering**: `disliked_titles` array sent with every request
+
+**Implementation**:
+- `NewsService`: Handles API calls with disliked titles
+- `NewsProvider`: Manages like/dislike state and article visibility
+- `NewsScreen`: UI with like/dislike buttons and confirmation dialogs
+
+**Model Mapping** (`lib/models/news.dart`):
+```dart
+// API fields → Internal properties
+source → agency
+content → summary
+original_url → url
+```
+
+**Parameter names**: Use `n` and `categories` (not `topN` or `topics`)
+
+#### 12. One-Click Deposit Creation (Best ADOFF Bank Integration)
 
 **CRITICAL**: After receiving expense optimization recommendations, users can create a deposit in Best ADOFF Bank with one click for the savings amount.
 

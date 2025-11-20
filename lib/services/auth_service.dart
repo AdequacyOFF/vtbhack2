@@ -1,15 +1,11 @@
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/bank_token.dart';
 import '../models/consent.dart';
 import 'bank_api_service.dart';
+import 'secure_storage_service.dart';
 
 class AuthService {
-  static const String _tokensKey = 'bank_tokens';
-  static const String _accountConsentsKey = 'account_consents';
-  static const String _paymentConsentsKey = 'payment_consents';
-  static const String _productConsentsKey = 'product_consents';
-  static const String _clientIdKey = 'client_id';
+  final _secureStorage = SecureStorageService();
 
   final Map<String, BankApiService> _bankServices = {};
   final Map<String, BankToken> _tokens = {};
@@ -37,15 +33,13 @@ class AuthService {
   // Client ID Management
   Future<void> setClientId(String clientId) async {
     _clientId = clientId;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_clientIdKey, clientId);
+    await _secureStorage.saveClientId(clientId);
   }
 
   Future<String?> getClientId() async {
     if (_clientId != null) return _clientId;
 
-    final prefs = await SharedPreferences.getInstance();
-    _clientId = prefs.getString(_clientIdKey);
+    _clientId = await _secureStorage.readClientId();
     return _clientId;
   }
 
@@ -53,8 +47,7 @@ class AuthService {
 
   // Token Management
   Future<void> loadTokens() async {
-    final prefs = await SharedPreferences.getInstance();
-    final tokensJson = prefs.getString(_tokensKey);
+    final tokensJson = await _secureStorage.readTokens();
 
     if (tokensJson != null) {
       final tokensData = jsonDecode(tokensJson) as Map<String, dynamic>;
@@ -66,12 +59,11 @@ class AuthService {
   }
 
   Future<void> saveTokens() async {
-    final prefs = await SharedPreferences.getInstance();
     final tokensData = <String, dynamic>{};
     _tokens.forEach((bankCode, token) {
       tokensData[bankCode] = token.toJson();
     });
-    await prefs.setString(_tokensKey, jsonEncode(tokensData));
+    await _secureStorage.saveTokens(jsonEncode(tokensData));
   }
 
   Future<BankToken> getTokenForBank(String bankCode) async {
@@ -90,10 +82,8 @@ class AuthService {
 
   // Consent Management
   Future<void> loadConsents() async {
-    final prefs = await SharedPreferences.getInstance();
-
     // Account consents
-    final accountConsentsJson = prefs.getString(_accountConsentsKey);
+    final accountConsentsJson = await _secureStorage.readAccountConsents();
     if (accountConsentsJson != null) {
       final consentsData = jsonDecode(accountConsentsJson) as Map<String, dynamic>;
       _accountConsents.clear();
@@ -103,7 +93,7 @@ class AuthService {
     }
 
     // Payment consents
-    final paymentConsentsJson = prefs.getString(_paymentConsentsKey);
+    final paymentConsentsJson = await _secureStorage.readPaymentConsents();
     if (paymentConsentsJson != null) {
       final consentsData = jsonDecode(paymentConsentsJson) as Map<String, dynamic>;
       _paymentConsents.clear();
@@ -113,7 +103,7 @@ class AuthService {
     }
 
     // Product consents
-    final productConsentsJson = prefs.getString(_productConsentsKey);
+    final productConsentsJson = await _secureStorage.readProductConsents();
     if (productConsentsJson != null) {
       final consentsData = jsonDecode(productConsentsJson) as Map<String, dynamic>;
       _productConsents.clear();
@@ -124,28 +114,26 @@ class AuthService {
   }
 
   Future<void> saveConsents() async {
-    final prefs = await SharedPreferences.getInstance();
-
     // Save account consents
     final accountConsentsData = <String, dynamic>{};
     _accountConsents.forEach((bankCode, consent) {
       accountConsentsData[bankCode] = consent.toJson();
     });
-    await prefs.setString(_accountConsentsKey, jsonEncode(accountConsentsData));
+    await _secureStorage.saveAccountConsents(jsonEncode(accountConsentsData));
 
     // Save payment consents
     final paymentConsentsData = <String, dynamic>{};
     _paymentConsents.forEach((bankCode, consent) {
       paymentConsentsData[bankCode] = consent.toJson();
     });
-    await prefs.setString(_paymentConsentsKey, jsonEncode(paymentConsentsData));
+    await _secureStorage.savePaymentConsents(jsonEncode(paymentConsentsData));
 
     // Save product consents
     final productConsentsData = <String, dynamic>{};
     _productConsents.forEach((bankCode, consent) {
       productConsentsData[bankCode] = consent.toJson();
     });
-    await prefs.setString(_productConsentsKey, jsonEncode(productConsentsData));
+    await _secureStorage.saveProductConsents(jsonEncode(productConsentsData));
   }
 
   Future<AccountConsent> getAccountConsent(String bankCode) async {
@@ -551,12 +539,8 @@ class AuthService {
     _productConsents.clear();
     _clientId = null;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(_tokensKey);
-    await prefs.remove(_accountConsentsKey);
-    await prefs.remove(_paymentConsentsKey);
-    await prefs.remove(_productConsentsKey);
-    await prefs.remove(_clientIdKey);
+    // Clear all sensitive data from secure storage
+    await _secureStorage.clearAllAuthData();
   }
 
   bool get isAuthenticated => _clientId != null && _clientId!.isNotEmpty;
