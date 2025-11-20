@@ -7,6 +7,7 @@ class ApiConfig {
   static const String vbankBaseUrl = 'https://vbank.open.bankingapi.ru';
   static const String abankBaseUrl = 'https://abank.open.bankingapi.ru';
   static const String sbankBaseUrl = 'https://sbank.open.bankingapi.ru';
+  static const String babankBaseUrl = 'https://bank.ad-off.digital';
 
   // Yandex Maps API Key
   static const String yandexMapsApiKey = 'ebd640e1-f658-4501-9d60-4995189398e5';
@@ -15,12 +16,14 @@ class ApiConfig {
   static const String vbankCode = 'vbank';
   static const String abankCode = 'abank';
   static const String sbankCode = 'sbank';
+  static const String babankCode = 'babank';
 
   // Bank display names
   static const Map<String, String> bankNames = {
     'vbank': 'VBank',
     'abank': 'ABank',
     'sbank': 'SBank',
+    'babank': 'Best ADOFF Bank',
   };
 
   // Bank consent auto-approval
@@ -28,6 +31,7 @@ class ApiConfig {
     'vbank': false,
     'abank': true,
     'sbank': false, // Requires manual approval
+    'babank': true, // Auto-approved
   };
 
   static String getBankBaseUrl(String bankCode) {
@@ -38,6 +42,8 @@ class ApiConfig {
         return abankBaseUrl;
       case 'sbank':
         return sbankBaseUrl;
+      case 'babank':
+        return babankBaseUrl;
       default:
         throw Exception('Unknown bank code: $bankCode');
     }

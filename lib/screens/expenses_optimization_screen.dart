@@ -4,8 +4,10 @@ import 'package:fl_chart/fl_chart.dart';
 
 import '../providers/account_provider.dart';
 import '../providers/virtual_account_provider.dart';
+import '../providers/product_provider.dart';
 import '../services/expenses_optimization_service.dart';
 import '../config/app_theme.dart';
+import '../config/api_config.dart';
 
 class ExpensesOptimizationScreen extends StatefulWidget {
   const ExpensesOptimizationScreen({super.key});
@@ -24,6 +26,7 @@ class _ExpensesOptimizationScreenState extends State<ExpensesOptimizationScreen>
   double _optimizedIncome = 0.0;
   bool _isLoading = false;
   bool _hasOptimization = false;
+  bool _isCreatingDeposit = false;
 
   @override
   void initState() {
@@ -150,6 +153,138 @@ class _ExpensesOptimizationScreenState extends State<ExpensesOptimizationScreen>
     }
   }
 
+  Future<void> _createDepositInBABank() async {
+    if (_currentSpending == null || _optimizedSpending == null) return;
+
+    final savings = _getTotalSpending(_currentSpending!) - _getTotalSpending(_optimizedSpending!);
+
+    if (savings <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Нет экономии для создания вклада'),
+          backgroundColor: Colors.orange,
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _isCreatingDeposit = true;
+    });
+
+    try {
+      final productProvider = context.read<ProductProvider>();
+
+      // Fetch products if not loaded
+      if (productProvider.productsByBank.isEmpty) {
+        await productProvider.fetchAllProducts();
+      }
+
+      // Get Best ADOFF Bank deposits
+      final babankProducts = productProvider.productsByBank['babank'] ?? [];
+      final babankDeposits = babankProducts.where((p) => p.isDeposit).toList();
+
+      if (babankDeposits.isEmpty) {
+        throw Exception('Нет доступных вкладов в Best ADOFF Bank');
+      }
+
+      // Find best deposit for the savings amount
+      final validDeposits = babankDeposits.where((p) {
+        final minAmount = p.minAmountValue;
+        final maxAmount = p.maxAmountValue;
+        if (minAmount != null && savings < minAmount) return false;
+        if (maxAmount != null && savings > maxAmount) return false;
+        return true;
+      }).toList();
+
+      if (validDeposits.isEmpty) {
+        throw Exception('Сумма ${savings.toStringAsFixed(2)} ₽ не подходит для доступных вкладов');
+      }
+
+      // Sort by interest rate (highest first)
+      validDeposits.sort((a, b) {
+        final rateA = a.interestRateValue ?? 0;
+        final rateB = b.interestRateValue ?? 0;
+        return rateB.compareTo(rateA);
+      });
+
+      final bestDeposit = validDeposits.first;
+
+      // Get source account from Best ADOFF Bank with sufficient balance
+      final accountProvider = context.read<AccountProvider>();
+      final accounts = accountProvider.accounts;
+
+      // Filter accounts from Best ADOFF Bank only
+      final babankAccounts = accounts.where((acc) => acc.bankCode == 'babank').toList();
+
+      if (babankAccounts.isEmpty) {
+        throw Exception('У вас нет счетов в Best ADOFF Bank. Создайте счет для открытия вклада.');
+      }
+
+      String? sourceAccountId;
+      for (final account in babankAccounts) {
+        final balance = accountProvider.getBalance(account);
+        if (balance >= savings) {
+          sourceAccountId = account.accountId;
+          break;
+        }
+      }
+
+      if (sourceAccountId == null) {
+        // Check if any babank account exists but with insufficient balance
+        final totalBabankBalance = babankAccounts.fold<double>(
+          0.0,
+          (sum, acc) => sum + accountProvider.getBalance(acc),
+        );
+
+        throw Exception(
+          'Недостаточно средств на счетах Best ADOFF Bank.\n'
+          'Необходимо: ${savings.toStringAsFixed(2)} ₽\n'
+          'Доступно: ${totalBabankBalance.toStringAsFixed(2)} ₽\n'
+          'Пополните счет или переведите средства из других банков.'
+        );
+      }
+
+      // Create deposit
+      await productProvider.openProduct(
+        product: bestDeposit,
+        amount: savings,
+        termMonths: 12, // Default 12 months
+        sourceAccountId: sourceAccountId,
+      );
+
+      setState(() {
+        _isCreatingDeposit = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Вклад на ${savings.toStringAsFixed(2)} ₽ успешно создан в Best ADOFF Bank под ${bestDeposit.interestRateValue}%',
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() {
+        _isCreatingDeposit = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Ошибка при создании вклада: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -237,7 +372,84 @@ class _ExpensesOptimizationScreenState extends State<ExpensesOptimizationScreen>
                     // Comparison card
                     _buildComparisonCard(),
 
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 24),
+
+                    // Create deposit in Best ADOFF Bank button (only if there are savings)
+                    if (_getTotalSpending(_currentSpending!) - _getTotalSpending(_optimizedSpending!) > 0) ...[
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [
+                              Color(0xFF10B981),
+                              Color(0xFF059669),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF10B981).withOpacity(0.3),
+                              blurRadius: 12,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            const Icon(
+                              Icons.savings_outlined,
+                              color: Colors.white,
+                              size: 40,
+                            ),
+                            const SizedBox(height: 12),
+                            const Text(
+                              'Сохраните экономию!',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              'Создайте вклад в Best ADOFF Bank на сумму экономии: ${(_getTotalSpending(_currentSpending!) - _getTotalSpending(_optimizedSpending!)).toStringAsFixed(0)} ₽',
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            SizedBox(
+                              width: double.infinity,
+                              child: ElevatedButton.icon(
+                                onPressed: _isCreatingDeposit ? null : _createDepositInBABank,
+                                icon: _isCreatingDeposit
+                                    ? const SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                                        ),
+                                      )
+                                    : const Icon(Icons.add_card, size: 24),
+                                label: Text(_isCreatingDeposit ? 'Создание вклада...' : 'Создать вклад одной кнопкой'),
+                                style: ElevatedButton.styleFrom(
+                                  padding: const EdgeInsets.symmetric(vertical: 16),
+                                  backgroundColor: Colors.white,
+                                  foregroundColor: const Color(0xFF059669),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
 
                     // Create virtual accounts button
                     SizedBox(
