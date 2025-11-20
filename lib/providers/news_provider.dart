@@ -19,11 +19,11 @@ class NewsProvider extends ChangeNotifier {
   /// Fetches personalized news based on user's transaction categories
   ///
   /// [transactions] - List of user transactions to analyze
-  /// [topN] - Number of news articles to fetch (default: 10)
+  /// [n] - Number of news articles to fetch (default: 10)
   /// [maxCategories] - Maximum number of categories to use for news topics (default: 5)
   Future<void> fetchPersonalizedNews({
     required List<BankTransaction> transactions,
-    int topN = 10,
+    int n = 10,
     int maxCategories = 5,
   }) async {
     if (transactions.isEmpty) {
@@ -54,7 +54,7 @@ class NewsProvider extends ChangeNotifier {
       // Fetch news based on top categories
       _newsArticles = await _newsService.fetchNewsFromCategories(
         categoryStats: categoryStats,
-        topN: topN,
+        n: n,
         maxCategories: maxCategories,
       );
 
@@ -72,16 +72,16 @@ class NewsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Fetches news with custom topics
+  /// Fetches news with custom categories
   ///
-  /// [topics] - List of custom topics
-  /// [topN] - Number of news articles to fetch
-  Future<void> fetchNewsByTopics({
-    required List<String> topics,
-    int topN = 10,
+  /// [categories] - List of custom categories
+  /// [n] - Number of news articles to fetch
+  Future<void> fetchNewsByCategories({
+    required List<String> categories,
+    int n = 10,
   }) async {
-    if (topics.isEmpty) {
-      _error = 'Topics list cannot be empty';
+    if (categories.isEmpty) {
+      _error = 'Categories list cannot be empty';
       notifyListeners();
       return;
     }
@@ -92,8 +92,8 @@ class NewsProvider extends ChangeNotifier {
 
     try {
       _newsArticles = await _newsService.fetchNews(
-        topics: topics,
-        topN: topN,
+        categories: categories,
+        n: n,
       );
 
       _isLoading = false;
@@ -108,15 +108,64 @@ class NewsProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Dislike a news article (hides it and adds to disliked list)
+  Future<void> dislikeNews(News news) async {
+    try {
+      // Save to disliked titles
+      await _newsService.dislikeNews(news.title);
+
+      // Remove from current list
+      _newsArticles.removeWhere((article) => article.title == news.title);
+
+      print('[NewsProvider] News disliked: ${news.title}');
+      notifyListeners();
+    } catch (e) {
+      print('[NewsProvider] Error disliking news: $e');
+    }
+  }
+
+  /// Like a news article (saves to liked list)
+  Future<void> likeNews(News news) async {
+    try {
+      await _newsService.likeNews(news.title);
+      print('[NewsProvider] News liked: ${news.title}');
+      notifyListeners();
+    } catch (e) {
+      print('[NewsProvider] Error liking news: $e');
+    }
+  }
+
+  /// Check if a news article is liked
+  Future<bool> isNewsLiked(String title) async {
+    try {
+      final likedTitles = await _newsService.getLikedTitles();
+      return likedTitles.contains(title);
+    } catch (e) {
+      print('[NewsProvider] Error checking if news is liked: $e');
+      return false;
+    }
+  }
+
+  /// Remove like from a news article
+  Future<void> removeLike(News news) async {
+    try {
+      await _newsService.removeLike(news.title);
+      print('[NewsProvider] Like removed: ${news.title}');
+      notifyListeners();
+    } catch (e) {
+      print('[NewsProvider] Error removing like: $e');
+    }
+  }
+
   /// Refreshes the current news
   Future<void> refresh({
     required List<BankTransaction> transactions,
-    int topN = 10,
+    int n = 10,
     int maxCategories = 5,
   }) async {
     await fetchPersonalizedNews(
       transactions: transactions,
-      topN: topN,
+      n: n,
       maxCategories: maxCategories,
     );
   }
