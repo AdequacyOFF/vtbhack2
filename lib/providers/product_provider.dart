@@ -138,6 +138,7 @@ class ProductProvider with ChangeNotifier {
       case 'vbank': return 'VBank';
       case 'abank': return 'ABank';
       case 'sbank': return 'SBank';
+      case 'babank': return 'Best ADOFF Bank';
       default: return bankCode;
     }
   }

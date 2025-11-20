@@ -6,7 +6,7 @@ import '../models/transaction.dart';
 import '../models/virtual_account.dart';
 
 class ExpensesOptimizationService {
-  static const String _apiUrl = 'http://81.200.148.163:51000/advice';
+  static const String _apiUrl = 'http://5.129.212.83:51000/advice';
 
   /// Collect spending statistics by category for the last 30 days
   Map<String, double> collectMonthlySpending(List<BankTransaction> transactions) {
@@ -151,13 +151,16 @@ class ExpensesOptimizationService {
         );
 
         final optimizedEarnings = (data['earnings'] as num).toDouble();
+        final comment = data['comment'] as String? ?? '';
 
         debugPrint('[ExpensesOptimization] Optimized spending: $optimizedWastes');
         debugPrint('[ExpensesOptimization] Optimized earnings: $optimizedEarnings');
+        debugPrint('[ExpensesOptimization] AI Comment: $comment');
 
         return {
           'wastes': optimizedWastes,
           'earnings': optimizedEarnings,
+          'comment': comment,
           'original_wastes': wastes,
           'original_earnings': earnings,
         };

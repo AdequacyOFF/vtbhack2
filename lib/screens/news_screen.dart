@@ -42,19 +42,39 @@ class _NewsScreenState extends State<NewsScreen> {
 
     await newsProvider.fetchPersonalizedNews(
       transactions: allTransactions,
-      topN: 10,
+      n: 10,
       maxCategories: 5,
     );
   }
 
   Future<void> _openUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (await canLaunchUrl(uri)) {
-      await launchUrl(uri, mode: LaunchMode.externalApplication);
-    } else {
+    try {
+      // Clean and validate URL
+      String cleanUrl = url.trim();
+
+      // Ensure URL has a scheme
+      if (!cleanUrl.startsWith('http://') && !cleanUrl.startsWith('https://')) {
+        cleanUrl = 'https://$cleanUrl';
+      }
+
+      final uri = Uri.parse(cleanUrl);
+
+      // Try to launch the URL
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Не удалось открыть ссылку: $cleanUrl')),
+        );
+      }
+    } catch (e) {
+      print('[NewsScreen] Error opening URL: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open: $url')),
+          SnackBar(content: Text('Ошибка при открытии ссылки: ${e.toString()}')),
         );
       }
     }
@@ -164,6 +184,22 @@ class _NewsScreenState extends State<NewsScreen> {
                 return _NewsCard(
                   news: news,
                   onTap: () => _openUrl(news.url),
+                  onLike: () async {
+                    await newsProvider.likeNews(news);
+                  },
+                  onDislike: () async {
+                    await newsProvider.dislikeNews(news);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Скрыто: ${news.title}'),
+                        duration: const Duration(seconds: 2),
+                        action: SnackBarAction(
+                          label: 'Обновить',
+                          onPressed: _loadNews,
+                        ),
+                      ),
+                    );
+                  },
                 );
               },
             ),
@@ -174,14 +210,56 @@ class _NewsScreenState extends State<NewsScreen> {
   }
 }
 
-class _NewsCard extends StatelessWidget {
+class _NewsCard extends StatefulWidget {
   final News news;
   final VoidCallback onTap;
+  final VoidCallback onLike;
+  final VoidCallback onDislike;
 
   const _NewsCard({
     required this.news,
     required this.onTap,
+    required this.onLike,
+    required this.onDislike,
   });
+
+  @override
+  State<_NewsCard> createState() => _NewsCardState();
+}
+
+class _NewsCardState extends State<_NewsCard> {
+  bool _isLiked = false;
+  bool _isCheckingLike = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _checkIfLiked();
+  }
+
+  Future<void> _checkIfLiked() async {
+    final newsProvider = context.read<NewsProvider>();
+    final isLiked = await newsProvider.isNewsLiked(widget.news.title);
+    if (mounted) {
+      setState(() {
+        _isLiked = isLiked;
+        _isCheckingLike = false;
+      });
+    }
+  }
+
+  Future<void> _toggleLike() async {
+    setState(() {
+      _isLiked = !_isLiked;
+    });
+
+    if (_isLiked) {
+      widget.onLike();
+    } else {
+      final newsProvider = context.read<NewsProvider>();
+      await newsProvider.removeLike(widget.news);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -192,20 +270,20 @@ class _NewsCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
       ),
       child: InkWell(
-        onTap: onTap,
+        onTap: widget.onTap,
         borderRadius: BorderRadius.circular(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Image
-            if (news.hasImage)
+            if (widget.news.hasImage)
               ClipRRect(
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(12),
                   topRight: Radius.circular(12),
                 ),
                 child: _Base64Image(
-                  base64String: news.imageBase64,
+                  base64String: widget.news.imageBase64,
                   height: 200,
                 ),
               ),
@@ -216,36 +294,22 @@ class _NewsCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Agency and Date
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          news.agency.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: Theme.of(context).primaryColor,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _formatDate(news.publishedAt),
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey,
-                        ),
-                      ),
-                    ],
+                  // Agency
+                  Text(
+                    widget.news.agency.toUpperCase(),
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: Theme.of(context).primaryColor,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 8),
 
                   // Title
                   Text(
-                    news.title,
+                    widget.news.title,
                     style: const TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
@@ -257,7 +321,7 @@ class _NewsCard extends StatelessWidget {
 
                   // Summary
                   Text(
-                    news.summary,
+                    widget.news.summary,
                     style: const TextStyle(
                       fontSize: 14,
                       color: Colors.black87,
@@ -268,14 +332,71 @@ class _NewsCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 12),
 
-                  // Read more button
+                  // Like/Dislike and Read more buttons
                   Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
+                      // Like and Dislike buttons
+                      Row(
+                        children: [
+                          // Like button
+                          IconButton(
+                            onPressed: _isCheckingLike ? null : _toggleLike,
+                            icon: Icon(
+                              _isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
+                              color: _isLiked ? Colors.blue : Colors.grey,
+                              size: 20,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            tooltip: _isLiked ? 'Убрать из избранного' : 'Добавить в избранное',
+                          ),
+                          const SizedBox(width: 16),
+                          // Dislike button
+                          IconButton(
+                            onPressed: () async {
+                              // Show confirmation dialog
+                              final confirm = await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Скрыть новость?'),
+                                  content: Text('Эта новость будет скрыта и не будет показываться снова.\n\n"${widget.news.title}"'),
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, false),
+                                      child: const Text('Отмена'),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => Navigator.pop(context, true),
+                                      child: const Text('Скрыть'),
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.red,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+
+                              if (confirm == true) {
+                                widget.onDislike();
+                              }
+                            },
+                            icon: const Icon(
+                              Icons.thumb_down_outlined,
+                              color: Colors.grey,
+                              size: 20,
+                            ),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            tooltip: 'Не показывать такие новости',
+                          ),
+                        ],
+                      ),
+                      // Read more button
                       TextButton.icon(
-                        onPressed: onTap,
+                        onPressed: widget.onTap,
                         icon: const Icon(Icons.open_in_new, size: 16),
-                        label: const Text('Read more'),
+                        label: const Text('Читать'),
                       ),
                     ],
                   ),
@@ -286,22 +407,6 @@ class _NewsCard extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  String _formatDate(DateTime date) {
-    final now = DateTime.now();
-    final difference = now.difference(date);
-
-    if (difference.inDays == 0) {
-      if (difference.inHours == 0) {
-        return '${difference.inMinutes}m ago';
-      }
-      return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else {
-      return '${date.day}/${date.month}/${date.year}';
-    }
   }
 }
 

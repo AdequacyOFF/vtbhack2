@@ -1,11 +1,10 @@
 class News {
-  final String agency;
+  final String agency;  // Mapped from 'source'
   final String title;
-  final String summary;
+  final String summary;  // Mapped from 'content'
   final String imageBase64;
-  final String url;
+  final String url;  // Mapped from 'original_url'
   final DateTime publishedAt;
-  final DateTime crawledAt;
 
   News({
     required this.agency,
@@ -14,34 +13,33 @@ class News {
     required this.imageBase64,
     required this.url,
     required this.publishedAt,
-    required this.crawledAt,
   });
 
   factory News.fromJson(Map<String, dynamic> json) {
     return News(
-      agency: json['agency'] as String? ?? '',
+      // Map 'source' to 'agency' for backwards compatibility
+      agency: json['source'] as String? ?? json['agency'] as String? ?? '',
       title: json['title'] as String? ?? '',
-      summary: json['summary'] as String? ?? '',
+      // Map 'content' to 'summary' for backwards compatibility
+      summary: json['content'] as String? ?? json['summary'] as String? ?? '',
       imageBase64: json['image_base64'] as String? ?? '',
-      url: json['url'] as String? ?? '',
+      // Map 'original_url' to 'url' for backwards compatibility
+      url: json['original_url'] as String? ?? json['url'] as String? ?? '',
+      // Use current time if no published date available
       publishedAt: json['published_at'] != null
           ? DateTime.parse(json['published_at'] as String)
-          : DateTime.now(),
-      crawledAt: json['crawled_at'] != null
-          ? DateTime.parse(json['crawled_at'] as String)
           : DateTime.now(),
     );
   }
 
   Map<String, dynamic> toJson() {
     return {
-      'agency': agency,
+      'source': agency,
       'title': title,
-      'summary': summary,
+      'content': summary,
       'image_base64': imageBase64,
-      'url': url,
+      'original_url': url,
       'published_at': publishedAt.toIso8601String(),
-      'crawled_at': crawledAt.toIso8601String(),
     };
   }
 
@@ -52,5 +50,5 @@ class News {
   }
 
   /// Check if news article has an image
-  bool get hasImage => imageBase64.isNotEmpty;
+  bool get hasImage => imageBase64.isNotEmpty && imageBase64 != 'null';
 }

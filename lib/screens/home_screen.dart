@@ -207,7 +207,7 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         try {
           await newsProvider.fetchPersonalizedNews(
             transactions: allTransactions,
-            topN: 10,
+            n: 10,
             maxCategories: 5,
           );
           debugPrint('[HomeScreen] Personalized news loaded successfully');

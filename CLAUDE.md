@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Multi-bank aggregator Flutter application for VTB Hack 2025. Connects to 3 OpenBanking APIs (VBank, ABank, SBank) to aggregate accounts, create smart financial products, and provide personalized news based on spending patterns.
+Multi-bank aggregator Flutter application for VTB Hack 2025. Connects to 4 OpenBanking APIs (VBank, ABank, SBank, Best ADOFF Bank) to aggregate accounts, create smart financial products, and provide personalized news based on spending patterns.
 
 **Tech Stack**: Flutter 3.9.2, Dart, Provider (state management), Yandex MapKit, PDF generation
 
@@ -65,11 +65,46 @@ flutter clean && flutter pub get
 
 ### Service Layer Pattern
 The app follows a clean architecture with three main layers:
-- **Services**: Business logic and API communication (auth, bank API, consent polling, notifications, expenses optimization)
+- **Services**: Business logic and API communication (auth, bank API, consent polling, notifications, expenses optimization, **secure storage**)
 - **Providers**: State management using Provider pattern (account, product, transfer, news, virtual accounts)
 - **Screens**: UI components
 
 ### Critical Implementation Details
+
+#### 0. Secure Storage for Sensitive Data
+**CRITICAL SECURITY**: All sensitive authentication data is encrypted at rest using `flutter_secure_storage`.
+
+**Implementation** (`lib/services/secure_storage_service.dart`):
+- Uses platform-specific hardware-backed encryption
+- Android: KeyStore with EncryptedSharedPreferences
+- iOS: Keychain with `first_unlock` accessibility
+
+**Protected Data**:
+- Bank access tokens (OAuth bearer tokens)
+- Bank refresh tokens
+- Account/Payment/Product consent IDs
+- Client identification credentials
+
+**Usage**:
+```dart
+final secureStorage = SecureStorageService();
+
+// Save encrypted data
+await secureStorage.saveTokens(tokensJson);
+await secureStorage.saveClientId(clientId);
+
+// Read encrypted data
+final tokens = await secureStorage.readTokens();
+final clientId = await secureStorage.readClientId();
+
+// Secure deletion
+await secureStorage.clearAllAuthData();
+```
+
+**IMPORTANT**:
+- `AuthService` uses `SecureStorageService` for ALL token and consent storage
+- Never store tokens or credentials in plain `SharedPreferences`
+- News preferences (likes/dislikes) remain in SharedPreferences as they're non-sensitive
 
 #### 1. Composite Balance Keys (`bankCode:accountId`)
 **IMPORTANT**: Accounts use composite keys to prevent ID collisions across banks.
@@ -94,7 +129,7 @@ Three consent types per bank:
 - **Product Agreement Consent**: Create/manage deposits, loans, cards
 
 **Auto-approval behavior**:
-- VBank & ABank: Auto-approved immediately
+- VBank & ABank & Best ADOFF Bank: Auto-approved immediately
 - SBank: Requires manual approval on bank website
 
 **Status flow**:
@@ -142,7 +177,7 @@ SBank has different response formats:
 #### 6. Automatic Data Loading
 
 When user logs in, the app automatically:
-1. Fetches bank tokens for all 3 banks
+1. Fetches bank tokens for all 4 banks
 2. Creates account consents (if missing)
 3. Loads all accounts from approved banks
 4. Fetches balances for each account
@@ -226,28 +261,46 @@ potentialEarnings = lastMonthIncome - totalAllocated
 #### 10. Expenses Optimization & ML Advice
 
 **ExpensesOptimizationService** provides AI-powered spending advice via ML service:
-- **Endpoint**: `http://81.200.148.163:51000/advice`
+- **Endpoint**: `http://5.129.212.83:51000/advice`
 - **Analyzes last 30 days** of spending by category
-- **Sends spending data** + income to ML service
-- **Receives personalized advice** on how to optimize expenses
+- **Sends spending data** + income + user wishes to ML service
+- **Receives personalized advice** on how to optimize expenses with AI justification
 
 **Request format:**
 ```json
 {
-  "spending": {
-    "food": 15000.50,
+  "earnings": 100000,
+  "wastes": {
+    "meal": 15000.50,
     "transport": 3000.00,
     "shopping": 8500.00,
     ...
   },
-  "income": 75000.00
+  "wishes": "хочу денег"
 }
 ```
 
-**Response:** Array of advice objects with categories and recommendations
+**Response format:**
+```json
+{
+  "earnings": 100000,
+  "wastes": {
+    "meal": 12000.00,
+    "transport": 2500.00,
+    "shopping": 7000.00,
+    ...
+  },
+  "comment": "Пользователь хочет больше денег, что означает необходимость сократить расходы. Снижены траты на рестораны и транспорт, что позволяет сохранить часть дохода."
+}
+```
+
+**Key Features:**
+- **User Wishes Input**: Free-form text field for user preferences (e.g., "хочу накопить на отпуск")
+- **AI Justification**: The `comment` field contains detailed neural network explanation
+- **Expandable UI**: Comment displayed in expandable card with brain icon (🧠) for optional reading
 
 **Category mapping (English ↔ Russian):**
-- food ↔ Еда
+- meal ↔ Еда
 - transport ↔ Транспорт
 - shopping ↔ Покупки
 - entertainment ↔ Развлечения
@@ -256,7 +309,94 @@ potentialEarnings = lastMonthIncome - totalAllocated
 - education ↔ Образование
 - other ↔ Другое
 
-**Flow**: Transactions → MCC Categorization → Monthly Aggregation → ML Service → Advice Display
+**Flow**: Transactions → MCC Categorization → Monthly Aggregation + User Wishes → ML Service → Optimized Budget + AI Comment → Display with Expandable Justification
+
+#### 11. News Personalization Service
+
+**UPDATED API** (`http://5.129.212.83:51000/news`):
+- Endpoint changed from old URL to new server
+- Request format updated to new API specification
+
+**Request format:**
+```json
+{
+  "n": 3,
+  "top_spend_categories": ["рестораны", "транспорт"],
+  "disliked_titles": ["война"]
+}
+```
+
+**Response format:**
+```json
+[
+  {
+    "source": "Финам",
+    "title": "News title",
+    "content": "Full article content",
+    "original_url": "https://...",
+    "image_base64": null
+  }
+]
+```
+
+**Key Features**:
+- **Like/Dislike System**: Users can like (👍) or dislike (👎) news articles
+- **Disliked Articles**: Automatically hidden and excluded from future requests
+- **Persistence**: Liked/disliked titles saved in `SharedPreferences` (non-sensitive data)
+- **Automatic Filtering**: `disliked_titles` array sent with every request
+
+**Implementation**:
+- `NewsService`: Handles API calls with disliked titles
+- `NewsProvider`: Manages like/dislike state and article visibility
+- `NewsScreen`: UI with like/dislike buttons and confirmation dialogs
+
+**Model Mapping** (`lib/models/news.dart`):
+```dart
+// API fields → Internal properties
+source → agency
+content → summary
+original_url → url
+```
+
+**Parameter names**: Use `n` and `categories` (not `topN` or `topics`)
+
+#### 12. One-Click Deposit Creation (Best ADOFF Bank Integration)
+
+**CRITICAL**: After receiving expense optimization recommendations, users can create a deposit in Best ADOFF Bank with one click for the savings amount.
+
+**Implementation** (`expenses_optimization_screen.dart`):
+- Automatically calculates savings: `currentSpending - optimizedSpending`
+- Fetches all Best ADOFF Bank products
+- Selects best deposit (highest interest rate) matching the savings amount
+- Requires source account from **Best ADOFF Bank only** (same-bank requirement)
+- Creates deposit with 12-month term by default
+
+**Important constraints:**
+```dart
+// Must use babank account as source
+final babankAccounts = accounts.where((acc) => acc.bankCode == 'babank').toList();
+
+// Validates min/max deposit limits
+final validDeposits = babankDeposits.where((p) {
+  final minAmount = p.minAmountValue;
+  final maxAmount = p.maxAmountValue;
+  if (minAmount != null && savings < minAmount) return false;
+  if (maxAmount != null && savings > maxAmount) return false;
+  return true;
+}).toList();
+```
+
+**UI behavior:**
+- Green gradient card only appears when `savings > 0`
+- Shows exact savings amount
+- Loading state while creating deposit
+- Success message includes interest rate
+
+**Error scenarios:**
+- No Best ADOFF Bank accounts → Prompt to create account
+- Insufficient balance → Shows required vs available with transfer suggestion
+- No valid deposits → Amount doesn't match deposit limits
+- Product consent missing → Automatically creates if needed
 
 ## API Configuration
 
@@ -264,10 +404,11 @@ potentialEarnings = lastMonthIncome - totalAllocated
 - VBank: `https://vbank.open.bankingapi.ru`
 - ABank: `https://abank.open.bankingapi.ru`
 - SBank: `https://sbank.open.bankingapi.ru`
+- Best ADOFF Bank: `https://bank.ad-off.digital`
 
 ### ML Service Endpoints
-- News Personalization: `http://81.200.148.163:51000/news`
-- Expenses Optimization: `http://81.200.148.163:51000/advice`
+- News Personalization: `http://5.129.212.83:51000/news`
+- Expenses Optimization: `http://5.129.212.83:51000/advice`
 
 ### Authentication Headers
 ```dart
@@ -288,9 +429,20 @@ All API calls in `BankApiService` use exponential backoff retry:
 ## Common Tasks
 
 ### Adding a New Bank
-1. Add bank config to `lib/config/api_config.dart`
-2. Add to `supportedBanks` list in `AuthService`
-3. Update consent creation logic to handle bank-specific quirks
+1. Add bank config to `lib/config/api_config.dart`:
+   - Add `<bankCode>BaseUrl` constant
+   - Add `<bankCode>Code` constant
+   - Add to `bankNames` map
+   - Add to `bankAutoApproval` map
+   - Update `getBankBaseUrl()` switch statement
+2. Add to `supportedBanks` list in `AuthService._initializeBankServices()`
+3. Update `ProductProvider._getBankName()` for display names
+4. Add ATM locations to `atm_map_screen.dart`:
+   - Add locations to `atmLocations` map
+   - Update `_getBankInitial()` for marker labels
+   - Update `_getBankMarkerAsset()` for custom marker
+   - Update `_getBankOpacity()` for fallback opacity
+5. Add marker asset: `assets/atm_<bankCode>.png`
 
 ### Modifying Consent Logic
 - **Creation**: `lib/services/bank_api_service.dart:113-327`
@@ -309,13 +461,34 @@ Uses `pdf` and `printing` packages:
 - Generates statement with all accounts and transactions
 - Includes bank logos, transaction tables, summary stats
 
+## ATM Map Implementation
+
+**Bank-specific colored markers**: Each bank uses its own marker icon from assets.
+
+**Required marker assets** (place in `assets/` folder):
+- `atm_vbank.png` - VBank marker (Blue)
+- `atm_abank.png` - ABank marker (Green)
+- `atm_sbank.png` - SBank marker (Red/Orange)
+- `atm_babank.png` - Best ADOFF Bank marker (Purple/Gold)
+- `atm_default.png` - Fallback marker (Gray)
+
+**Marker configuration:**
+```dart
+// Auto-scales to 15% of original size
+placemark.setIconStyle(IconStyle(scale: 0.15));
+```
+
+**Location distribution**: ATM locations spread ~10-15km apart across Moscow to simulate city-wide coverage.
+
+**Fallback behavior**: If marker asset not found, uses default map pin with bank-specific opacity (1.0, 0.8, 0.9, 0.85).
+
 ## Known Issues & Limitations
 
-1. **Hardcoded ATM locations**: ATM map uses static coordinates for demo
-2. **3-bank limit**: Architecture supports exactly 3 banks (vbank, abank, sbank)
-3. **Cashback calculation**: Requires bank API support (not fully implemented)
-4. **Yandex Maps API key**: Stored in `api_config.dart`, update if expired
-5. **Scoped Storage**: Android 10+ requires special permissions for PDF saving
+1. **ATM locations**: Static coordinates distributed across Moscow for demo
+2. **Cashback calculation**: Requires bank API support (not fully implemented)
+3. **Yandex Maps API key**: Stored in `api_config.dart`, update if expired
+4. **Scoped Storage**: Android 10+ requires special permissions for PDF saving
+5. **Deposit creation**: Requires source account from same bank (Best ADOFF Bank for deposit feature)
 
 ## Important Files to Review
 
@@ -325,8 +498,11 @@ Uses `pdf` and `printing` packages:
 - `lib/services/consent_polling_service.dart` - Automatic consent approval polling
 - `lib/services/expenses_optimization_service.dart` - ML-powered spending advice
 - `lib/services/mcc_category_service.dart` - MCC code to category mapping
-- `lib/providers/account_provider.dart` - Account/balance/transaction state
+- `lib/providers/account_provider.dart` - Account/balance/transaction state (`accounts` not `allAccounts`)
+- `lib/providers/product_provider.dart` - Product management and deposit/loan creation
 - `lib/providers/virtual_account_provider.dart` - Virtual budgeting accounts
+- `lib/screens/expenses_optimization_screen.dart` - ML recommendations + one-click deposit
+- `lib/screens/atm_map_screen.dart` - Yandex Maps integration with bank markers
 - `lib/main.dart` - App initialization and provider setup
 
 ## Testing
@@ -362,4 +538,4 @@ All handled automatically by `_executeWithRetry` in `BankApiService`. Throws aft
 - Prefer `debugPrint()` over `print()` for logging
 - Notification types: `success`, `info`, `warning`, `error`
 - Date format: ISO 8601 strings from API, convert to DateTime for display
-- Bank codes: Always lowercase (`vbank`, `abank`, `sbank`)
+- Bank codes: Always lowercase (`vbank`, `abank`, `sbank`, `babank`)

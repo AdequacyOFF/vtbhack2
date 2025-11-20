@@ -43,6 +43,7 @@ dependencies:
 
   # Local Storage
   shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.0.0
 
   # Maps
   yandex_maps_mapkit: 4.25.0-beta
