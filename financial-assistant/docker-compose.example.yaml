@@ -1,0 +1,46 @@
+services:
+  news-aggregator:
+    build:
+      context: .
+      dockerfile: news_aggregator/Dockerfile
+    container_name: news-aggregator
+    ports:
+      - "8000:8000"
+    environment:
+      NEWS_AGGREGATOR_PERIOD: ${NEWS_AGGREGATOR_PERIOD:-1d}
+      NEWS_AGGREGATOR_PASSIVE_MODE_DUR: ${NEWS_AGGREGATOR_PASSIVE_MODE_DUR:-300}
+      NEWS_AGGREGATOR_CACHE_DIR: /cache
+    volumes:
+      # Copy config.example.yaml to config.yaml locally before running compose
+      - ./news_aggregator/config.yaml:/app/news_aggregator/config.yaml:ro
+      - ./news_aggregator/sources.json:/app/news_aggregator/sources.json:ro
+      - ./news_aggregator/cache:/cache
+
+  llm-service:
+    build:
+      context: .
+      dockerfile: llm/Dockerfile
+    container_name: llm-service
+    depends_on:
+      - news-aggregator
+    network_mode: host
+    environment:
+      LLM_MODEL_PATH: /model
+      LLM_MODEL_HOST: 0.0.0.0
+      LLM_SAMPLING_SAMPLE_SIZE: ${LLM_SAMPLING_SAMPLE_SIZE:-20}
+      LLM_AGGREGATOR_HOST: localhost
+      LLM_AGGREGATOR_PORT: ${LLM_AGGREGATOR_PORT:-8000}
+      LLM_AGGREGATOR_TIMEOUT_SECONDS: ${LLM_AGGREGATOR_TIMEOUT_SECONDS:-15}
+      LLM_GPU_UTILIZATION: ${LLM_GPU_UTILIZATION:-0.8}
+      LLM_MAX_MODEL_LENGTH: ${LLM_MAX_MODEL_LENGTH:-16384}
+    volumes:
+      # Copy config.example.yaml to config.yaml locally before running compose
+      - ./llm/config.yaml:/app/llm/config.yaml:ro
+      - ./models:/model
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
