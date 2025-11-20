@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Multi-bank aggregator Flutter application for VTB Hack 2025. Connects to 3 OpenBanking APIs (VBank, ABank, SBank) to aggregate accounts, create smart financial products, and provide personalized news based on spending patterns.
+Multi-bank aggregator Flutter application for VTB Hack 2025. Connects to 4 OpenBanking APIs (VBank, ABank, SBank, Best ADOFF Bank) to aggregate accounts, create smart financial products, and provide personalized news based on spending patterns.
 
 **Tech Stack**: Flutter 3.9.2, Dart, Provider (state management), Yandex MapKit, PDF generation
 
@@ -94,7 +94,7 @@ Three consent types per bank:
 - **Product Agreement Consent**: Create/manage deposits, loans, cards
 
 **Auto-approval behavior**:
-- VBank & ABank: Auto-approved immediately
+- VBank & ABank & Best ADOFF Bank: Auto-approved immediately
 - SBank: Requires manual approval on bank website
 
 **Status flow**:
@@ -142,7 +142,7 @@ SBank has different response formats:
 #### 6. Automatic Data Loading
 
 When user logs in, the app automatically:
-1. Fetches bank tokens for all 3 banks
+1. Fetches bank tokens for all 4 banks
 2. Creates account consents (if missing)
 3. Loads all accounts from approved banks
 4. Fetches balances for each account
@@ -258,12 +258,51 @@ potentialEarnings = lastMonthIncome - totalAllocated
 
 **Flow**: Transactions → MCC Categorization → Monthly Aggregation → ML Service → Advice Display
 
+#### 11. One-Click Deposit Creation (Best ADOFF Bank Integration)
+
+**CRITICAL**: After receiving expense optimization recommendations, users can create a deposit in Best ADOFF Bank with one click for the savings amount.
+
+**Implementation** (`expenses_optimization_screen.dart`):
+- Automatically calculates savings: `currentSpending - optimizedSpending`
+- Fetches all Best ADOFF Bank products
+- Selects best deposit (highest interest rate) matching the savings amount
+- Requires source account from **Best ADOFF Bank only** (same-bank requirement)
+- Creates deposit with 12-month term by default
+
+**Important constraints:**
+```dart
+// Must use babank account as source
+final babankAccounts = accounts.where((acc) => acc.bankCode == 'babank').toList();
+
+// Validates min/max deposit limits
+final validDeposits = babankDeposits.where((p) {
+  final minAmount = p.minAmountValue;
+  final maxAmount = p.maxAmountValue;
+  if (minAmount != null && savings < minAmount) return false;
+  if (maxAmount != null && savings > maxAmount) return false;
+  return true;
+}).toList();
+```
+
+**UI behavior:**
+- Green gradient card only appears when `savings > 0`
+- Shows exact savings amount
+- Loading state while creating deposit
+- Success message includes interest rate
+
+**Error scenarios:**
+- No Best ADOFF Bank accounts → Prompt to create account
+- Insufficient balance → Shows required vs available with transfer suggestion
+- No valid deposits → Amount doesn't match deposit limits
+- Product consent missing → Automatically creates if needed
+
 ## API Configuration
 
 ### Bank API Base URLs
 - VBank: `https://vbank.open.bankingapi.ru`
 - ABank: `https://abank.open.bankingapi.ru`
 - SBank: `https://sbank.open.bankingapi.ru`
+- Best ADOFF Bank: `https://bank.ad-off.digital`
 
 ### ML Service Endpoints
 - News Personalization: `http://81.200.148.163:51000/news`
@@ -288,9 +327,20 @@ All API calls in `BankApiService` use exponential backoff retry:
 ## Common Tasks
 
 ### Adding a New Bank
-1. Add bank config to `lib/config/api_config.dart`
-2. Add to `supportedBanks` list in `AuthService`
-3. Update consent creation logic to handle bank-specific quirks
+1. Add bank config to `lib/config/api_config.dart`:
+   - Add `<bankCode>BaseUrl` constant
+   - Add `<bankCode>Code` constant
+   - Add to `bankNames` map
+   - Add to `bankAutoApproval` map
+   - Update `getBankBaseUrl()` switch statement
+2. Add to `supportedBanks` list in `AuthService._initializeBankServices()`
+3. Update `ProductProvider._getBankName()` for display names
+4. Add ATM locations to `atm_map_screen.dart`:
+   - Add locations to `atmLocations` map
+   - Update `_getBankInitial()` for marker labels
+   - Update `_getBankMarkerAsset()` for custom marker
+   - Update `_getBankOpacity()` for fallback opacity
+5. Add marker asset: `assets/atm_<bankCode>.png`
 
 ### Modifying Consent Logic
 - **Creation**: `lib/services/bank_api_service.dart:113-327`
@@ -309,13 +359,34 @@ Uses `pdf` and `printing` packages:
 - Generates statement with all accounts and transactions
 - Includes bank logos, transaction tables, summary stats
 
+## ATM Map Implementation
+
+**Bank-specific colored markers**: Each bank uses its own marker icon from assets.
+
+**Required marker assets** (place in `assets/` folder):
+- `atm_vbank.png` - VBank marker (Blue)
+- `atm_abank.png` - ABank marker (Green)
+- `atm_sbank.png` - SBank marker (Red/Orange)
+- `atm_babank.png` - Best ADOFF Bank marker (Purple/Gold)
+- `atm_default.png` - Fallback marker (Gray)
+
+**Marker configuration:**
+```dart
+// Auto-scales to 15% of original size
+placemark.setIconStyle(IconStyle(scale: 0.15));
+```
+
+**Location distribution**: ATM locations spread ~10-15km apart across Moscow to simulate city-wide coverage.
+
+**Fallback behavior**: If marker asset not found, uses default map pin with bank-specific opacity (1.0, 0.8, 0.9, 0.85).
+
 ## Known Issues & Limitations
 
-1. **Hardcoded ATM locations**: ATM map uses static coordinates for demo
-2. **3-bank limit**: Architecture supports exactly 3 banks (vbank, abank, sbank)
-3. **Cashback calculation**: Requires bank API support (not fully implemented)
-4. **Yandex Maps API key**: Stored in `api_config.dart`, update if expired
-5. **Scoped Storage**: Android 10+ requires special permissions for PDF saving
+1. **ATM locations**: Static coordinates distributed across Moscow for demo
+2. **Cashback calculation**: Requires bank API support (not fully implemented)
+3. **Yandex Maps API key**: Stored in `api_config.dart`, update if expired
+4. **Scoped Storage**: Android 10+ requires special permissions for PDF saving
+5. **Deposit creation**: Requires source account from same bank (Best ADOFF Bank for deposit feature)
 
 ## Important Files to Review
 
@@ -325,8 +396,11 @@ Uses `pdf` and `printing` packages:
 - `lib/services/consent_polling_service.dart` - Automatic consent approval polling
 - `lib/services/expenses_optimization_service.dart` - ML-powered spending advice
 - `lib/services/mcc_category_service.dart` - MCC code to category mapping
-- `lib/providers/account_provider.dart` - Account/balance/transaction state
+- `lib/providers/account_provider.dart` - Account/balance/transaction state (`accounts` not `allAccounts`)
+- `lib/providers/product_provider.dart` - Product management and deposit/loan creation
 - `lib/providers/virtual_account_provider.dart` - Virtual budgeting accounts
+- `lib/screens/expenses_optimization_screen.dart` - ML recommendations + one-click deposit
+- `lib/screens/atm_map_screen.dart` - Yandex Maps integration with bank markers
 - `lib/main.dart` - App initialization and provider setup
 
 ## Testing
@@ -362,4 +436,4 @@ All handled automatically by `_executeWithRetry` in `BankApiService`. Throws aft
 - Prefer `debugPrint()` over `print()` for logging
 - Notification types: `success`, `info`, `warning`, `error`
 - Date format: ISO 8601 strings from API, convert to DateTime for display
-- Bank codes: Always lowercase (`vbank`, `abank`, `sbank`)
+- Bank codes: Always lowercase (`vbank`, `abank`, `sbank`, `babank`)

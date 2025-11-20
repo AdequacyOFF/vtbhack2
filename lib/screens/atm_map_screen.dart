@@ -9,19 +9,24 @@ import '../config/api_config.dart';
 
 final Map<String, List<Point>> atmLocations = {
   'vbank': [
-    const Point(latitude: 55.7558, longitude: 37.6173),
-    const Point(latitude: 55.7522, longitude: 37.6156),
-    const Point(latitude: 55.7514, longitude: 37.6198),
+    const Point(latitude: 55.7558, longitude: 37.6173), // Red Square area
+    const Point(latitude: 55.6800, longitude: 37.5700), // South Moscow
+    const Point(latitude: 55.8300, longitude: 37.6400), // North Moscow
   ],
   'abank': [
-    const Point(latitude: 55.7540, longitude: 37.6210),
-    const Point(latitude: 55.7500, longitude: 37.6180),
-    const Point(latitude: 55.7560, longitude: 37.6150),
+    const Point(latitude: 55.7540, longitude: 37.8500), // East Moscow
+    const Point(latitude: 55.7200, longitude: 37.4000), // West Moscow
+    const Point(latitude: 55.8000, longitude: 37.5500), // Northwest
   ],
   'sbank': [
-    const Point(latitude: 55.7530, longitude: 37.6190),
-    const Point(latitude: 55.7510, longitude: 37.6170),
-    const Point(latitude: 55.7545, longitude: 37.6200),
+    const Point(latitude: 55.6500, longitude: 37.6000), // Southwest
+    const Point(latitude: 55.7800, longitude: 37.7500), // Northeast
+    const Point(latitude: 55.7000, longitude: 37.7000), // Southeast
+  ],
+  'babank': [
+    const Point(latitude: 55.7530, longitude: 37.4500), // West-Central
+    const Point(latitude: 55.8200, longitude: 37.8000), // Far Northeast
+    const Point(latitude: 55.6700, longitude: 37.5000), // Southwest
   ],
 };
 
@@ -93,11 +98,11 @@ class _AtmMapScreenState extends State<AtmMapScreen> {
     // Apply initial theme
     _applyMapTheme();
 
-    // Set initial camera position to Moscow center
+    // Set initial camera position to Moscow center with wider view
     _mapWindow!.map.move(
       CameraPosition(
         const Point(latitude: 55.7530, longitude: 37.6190),
-        zoom: 14.0,
+        zoom: 10.0, // Zoomed out to see all markers
         azimuth: 0.0,
         tilt: 0.0,
       ),
@@ -135,20 +140,21 @@ class _AtmMapScreenState extends State<AtmMapScreen> {
           ),
         );
 
-        // Try to use custom asset icon, otherwise use default with opacity based on bank
+        // Use bank-specific colored marker
         try {
+          final markerAsset = _getBankMarkerAsset(bankCode);
           placemark.setIcon(
             image_provider.ImageProvider.fromImageProvider(
-              const AssetImage('assets/atm_icon.png'),
+              AssetImage(markerAsset),
             ),
           );
           placemark.setIconStyle(
             IconStyle(
-              scale: 0.2,
+              scale: 0.15,
             ),
           );
         } catch (e) {
-          // Use default pin marker with bank-specific styling
+          // Use default pin marker with bank-specific styling if asset not found
           // The default pin will be used, and we differentiate by text label
           placemark.opacity = _getBankOpacity(bankCode);
         }
@@ -171,8 +177,25 @@ class _AtmMapScreenState extends State<AtmMapScreen> {
         return 'ABank';
       case 'sbank':
         return 'SBank';
+      case 'babank':
+        return 'Best ADOFF Bank';
       default:
         return 'ATM';
+    }
+  }
+
+  String _getBankMarkerAsset(String bankCode) {
+    switch (bankCode) {
+      case 'vbank':
+        return 'assets/atm_vbank.png';
+      case 'abank':
+        return 'assets/atm_abank.png';
+      case 'sbank':
+        return 'assets/atm_sbank.png';
+      case 'babank':
+        return 'assets/atm_babank.png';
+      default:
+        return 'assets/atm_default.png';
     }
   }
 
@@ -185,6 +208,8 @@ class _AtmMapScreenState extends State<AtmMapScreen> {
         return 0.8;
       case 'sbank':
         return 0.9;
+      case 'babank':
+        return 0.85;
       default:
         return 0.7;
     }

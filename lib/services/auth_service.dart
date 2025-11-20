@@ -27,6 +27,7 @@ class AuthService {
     _bankServices['vbank'] = BankApiService('vbank');
     _bankServices['abank'] = BankApiService('abank');
     _bankServices['sbank'] = BankApiService('sbank');
+    _bankServices['babank'] = BankApiService('babank');
   }
 
   BankApiService getBankService(String bankCode) {
@@ -560,5 +561,5 @@ class AuthService {
 
   bool get isAuthenticated => _clientId != null && _clientId!.isNotEmpty;
 
-  List<String> get supportedBanks => ['vbank', 'abank', 'sbank'];
+  List<String> get supportedBanks => ['vbank', 'abank', 'sbank', 'babank'];
 }
