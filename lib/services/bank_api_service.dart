@@ -204,19 +204,48 @@ class BankApiService {
     });
   }
 
-  Future<PaymentConsent> createPaymentConsent(String clientId, String debtorAccount) async {
+  Future<PaymentConsent> createPaymentConsent(
+    String clientId,
+    String debtorAccount, {
+    String consentType = 'vrp',
+    double? amount,
+    String? creditorAccount,
+    String? creditorName,
+    String? reference,
+  }) async {
     final token = await ensureValidToken();
 
-    final body = {
+    // Build request body based on consent type
+    final Map<String, dynamic> body = {
       'requesting_bank': ApiConfig.clientId,
       'client_id': clientId,
-      'consent_type': 'vrp',
+      'consent_type': consentType,
       'debtor_account': debtorAccount,
-      'vrp_max_individual_amount': 1000000.00,
-      'vrp_daily_limit': 3000000.00,
-      'vrp_monthly_limit': 50000000.00,
-      'valid_until': '2026-12-31T23:59:59',
     };
+
+    if (consentType == 'single_use') {
+      // Single-use consent with specific recipient and amount
+      body['amount'] = amount ?? 0.0;
+      body['currency'] = 'RUB';
+      if (creditorAccount != null) {
+        body['creditor_account'] = creditorAccount;
+      }
+      if (creditorName != null) {
+        body['creditor_name'] = creditorName;
+      }
+      if (reference != null) {
+        body['reference'] = reference;
+      }
+    } else if (consentType == 'vrp') {
+      // VRP consent with limits
+      body['vrp_max_individual_amount'] = 1000000.00;
+      body['vrp_daily_limit'] = 3000000.00;
+      body['vrp_monthly_limit'] = 50000000.00;
+      body['valid_until'] = '2026-12-31T23:59:59';
+    }
+
+    print('[$bankCode] Creating $consentType payment consent');
+    print('[$bankCode] Request body: ${jsonEncode(body)}');
 
     final response = await http.post(
       Uri.parse('$baseUrl/payment-consents/request'),
@@ -1022,6 +1051,7 @@ class BankApiService {
     String currency = 'RUB',
     String? creditorBankCode,
     String? paymentConsentId,
+    String? accountConsentId,
     String? comment,
   }) async {
     final token = await ensureValidToken();
@@ -1050,6 +1080,7 @@ class BankApiService {
     final headers = {
       ..._authHeaders(token),
       'x-requesting-bank': ApiConfig.clientId,
+      if (accountConsentId != null) 'x-consent-id': accountConsentId,
       if (paymentConsentId != null) 'x-payment-consent-id': paymentConsentId,
     };
 

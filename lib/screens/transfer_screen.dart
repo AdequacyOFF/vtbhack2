@@ -28,6 +28,7 @@ class _TransferScreenState extends State<TransferScreen> {
   final _commentController = TextEditingController();
   final _recipientIdController = TextEditingController();
   final _recipientNameController = TextEditingController();
+  final _recipientAccountController = TextEditingController();
 
   BankAccount? _fromAccount;
   BankAccount? _toAccount;
@@ -44,6 +45,7 @@ class _TransferScreenState extends State<TransferScreen> {
     _commentController.dispose();
     _recipientIdController.dispose();
     _recipientNameController.dispose();
+    _recipientAccountController.dispose();
     super.dispose();
   }
 
@@ -430,6 +432,18 @@ class _TransferScreenState extends State<TransferScreen> {
 
             const SizedBox(height: 16),
 
+            // Recipient Account ID
+            TextField(
+              controller: _recipientAccountController,
+              decoration: const InputDecoration(
+                labelText: 'Номер счета получателя',
+                prefixIcon: Icon(Icons.account_box),
+                hintText: '40817810...',
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // Recipient Name (for saving as contact)
             if (_saveAsContact)
               Column(
@@ -530,20 +544,30 @@ class _TransferScreenState extends State<TransferScreen> {
         return;
       }
 
+      if (_selectedContact!.accountId == null || _selectedContact!.accountId!.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('У контакта не указан номер счета')),
+        );
+        return;
+      }
+
       recipientClientId = _selectedContact!.clientId;
       recipientName = _selectedContact!.name;
       recipientBank = _selectedContact!.bankCode;
       recipientAccountId = _selectedContact!.accountId;
     } else {
       // New recipient
-      if (_recipientIdController.text.trim().isEmpty || _selectedRecipientBank == null) {
+      if (_recipientIdController.text.trim().isEmpty ||
+          _recipientAccountController.text.trim().isEmpty ||
+          _selectedRecipientBank == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Укажите Client ID и банк получателя')),
+          const SnackBar(content: Text('Укажите Client ID, номер счета и банк получателя')),
         );
         return;
       }
 
       recipientClientId = _recipientIdController.text.trim();
+      recipientAccountId = _recipientAccountController.text.trim();
       recipientBank = _selectedRecipientBank;
 
       if (_saveAsContact && _recipientNameController.text.trim().isEmpty) {
@@ -627,10 +651,19 @@ class _TransferScreenState extends State<TransferScreen> {
     BankAccount? targetAccount = _toAccount;
 
     if (_transferType != TransferType.ownAccounts) {
+      // Validate we have account ID
+      if (recipientAccountId == null || recipientAccountId.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Отсутствует номер счета получателя')),
+          );
+        }
+        return;
+      }
+
       // Create a temporary account object for the transfer
-      // In production, you'd look this up via API
       targetAccount = BankAccount(
-        accountId: recipientAccountId ?? 'UNKNOWN',
+        accountId: recipientAccountId,
         bankCode: recipientBank!,
         status: 'Enabled',
         currency: 'RUB',

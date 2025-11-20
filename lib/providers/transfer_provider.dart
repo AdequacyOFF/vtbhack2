@@ -31,18 +31,31 @@ class TransferProvider with ChangeNotifier {
     try {
       final clientId = _authService.clientId;
       final fromService = _authService.getBankService(fromAccount.bankCode);
-
-      final paymentConsent = await _authService.getPaymentConsent(
-        fromAccount.bankCode,
-        fromAccount.identification ?? fromAccount.accountId,
-      );
-
-      if (!paymentConsent.isApproved) {
-        throw Exception('Payment consent not approved');
-      }
-
       final isInterBank = fromAccount.bankCode != toAccount.bankCode;
 
+      // Get the account consent ID for this bank
+      final accountConsent = await _authService.getAccountConsent(fromAccount.bankCode);
+      print('[$fromAccount.bankCode] Using account consent: ${accountConsent.consentId}');
+
+      // NEW STRATEGY: Create a single_use consent for this specific transfer
+      print('[$fromAccount.bankCode] Creating single_use payment consent for transfer');
+
+      final singleUseConsent = await fromService.createPaymentConsent(
+        clientId,
+        fromAccount.identification ?? fromAccount.accountId,
+        consentType: 'single_use',
+        amount: amount,
+        creditorAccount: toAccount.identification ?? toAccount.accountId,
+        creditorName: toAccount.name ?? 'Recipient',
+        reference: comment ?? 'Transfer',
+      );
+
+      print('[$fromAccount.bankCode] Single-use consent created: ${singleUseConsent.consentId}');
+
+      // Wait a moment for consent to be processed
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Create payment using BOTH the account consent and the payment consent
       final result = await fromService.createPayment(
         clientId: clientId,
         debtorAccountId: fromAccount.identification ?? fromAccount.accountId,
@@ -51,7 +64,8 @@ class TransferProvider with ChangeNotifier {
         comment: comment,
         currency: fromAccount.currency,
         creditorBankCode: isInterBank ? toAccount.bankCode : null,
-        paymentConsentId: paymentConsent.consentId,
+        accountConsentId: accountConsent.consentId,
+        paymentConsentId: singleUseConsent.consentId,
       );
 
       _lastPaymentId = result['data']['paymentId'];

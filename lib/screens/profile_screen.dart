@@ -5,11 +5,13 @@ import '../services/auth_service.dart';
 import '../providers/account_provider.dart';
 import '../services/pdf_service.dart';
 import '../config/app_theme.dart';
+import '../config/api_config.dart';
 import 'login_screen.dart';
 import 'consent_management_screen.dart';
 import 'pdf_viewer_screen.dart';
 import 'contacts_screen.dart';
 import 'debts_screen.dart';
+import 'my_agreements_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -189,6 +191,20 @@ class ProfileScreen extends StatelessWidget {
           ),
           _buildActionCard(
             context,
+            icon: Icons.account_tree_rounded,
+            title: 'Мои продукты',
+            subtitle: 'Депозиты, кредиты и карты. Управление и закрытие',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const MyAgreementsScreen(),
+                ),
+              );
+            },
+          ),
+          _buildActionCard(
+            context,
             icon: Icons.contacts_rounded,
             title: 'Мои контакты',
             subtitle: 'Сохраненные получатели для быстрых переводов',
@@ -260,6 +276,13 @@ class ProfileScreen extends StatelessWidget {
                 const SnackBar(content: Text('Функция в разработке')),
               );
             },
+          ),
+          _buildActionCard(
+            context,
+            icon: Icons.account_balance,
+            title: 'Создать новый счет',
+            subtitle: 'Открыть счет в одном из банков',
+            onTap: () => _showCreateAccountDialog(context),
           ),
           _buildActionCard(
             context,
@@ -352,6 +375,13 @@ class ProfileScreen extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  void _showCreateAccountDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const _CreateAccountDialog(),
     );
   }
 
@@ -1128,5 +1158,129 @@ class _CategoryInterestsScreenState extends State<CategoryInterestsScreen> {
         ),
       ),
     );
+  }
+}
+
+// Create Account Dialog
+class _CreateAccountDialog extends StatefulWidget {
+  const _CreateAccountDialog();
+
+  @override
+  State<_CreateAccountDialog> createState() => _CreateAccountDialogState();
+}
+
+class _CreateAccountDialogState extends State<_CreateAccountDialog> {
+  String? _selectedBank;
+  String _accountType = 'current';
+  String _currency = 'RUB';
+  bool _isProcessing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final banks = ['vbank', 'abank', 'sbank'];
+
+    return AlertDialog(
+      title: const Text('Создать новый счет'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Выберите банк и параметры счета',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _selectedBank,
+              decoration: const InputDecoration(labelText: 'Банк'),
+              items: banks.map<DropdownMenuItem<String>>((bank) {
+                return DropdownMenuItem<String>(
+                  value: bank,
+                  child: Text(ApiConfig.getBankName(bank)),
+                );
+              }).toList(),
+              onChanged: (value) => setState(() => _selectedBank = value),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _accountType,
+              decoration: const InputDecoration(labelText: 'Тип счета'),
+              items: const [
+                DropdownMenuItem(value: 'current', child: Text('Текущий счет')),
+                DropdownMenuItem(value: 'savings', child: Text('Накопительный')),
+              ],
+              onChanged: (value) => setState(() => _accountType = value!),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _currency,
+              decoration: const InputDecoration(labelText: 'Валюта'),
+              items: const [
+                DropdownMenuItem(value: 'RUB', child: Text('Рубль (RUB)')),
+                DropdownMenuItem(value: 'USD', child: Text('Доллар (USD)')),
+                DropdownMenuItem(value: 'EUR', child: Text('Евро (EUR)')),
+              ],
+              onChanged: (value) => setState(() => _currency = value!),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isProcessing ? null : () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        ElevatedButton(
+          onPressed: _isProcessing ? null : _submit,
+          child: _isProcessing
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Создать'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _submit() async {
+    if (_selectedBank == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Выберите банк')),
+      );
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+
+    try {
+      final authService = context.read<AuthService>();
+      final service = authService.getBankService(_selectedBank!);
+
+      await service.createAccount(
+        clientId: authService.clientId,
+        accountType: _accountType,
+        currency: _currency,
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Счет успешно создан!')),
+        );
+
+        // Refresh accounts
+        context.read<AccountProvider>().fetchAllAccounts();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
   }
 }

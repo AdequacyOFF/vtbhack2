@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/product_provider.dart';
 import '../providers/account_provider.dart';
+import '../services/auth_service.dart';
 import '../config/app_theme.dart';
 import '../config/api_config.dart';
 
@@ -61,50 +62,92 @@ class _ProductList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (products.isEmpty) {
-      return const Center(child: Text('Нет доступных продуктов'));
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('Нет доступных продуктов'),
+            if (type == 'card') ...[
+              const SizedBox(height: 16),
+              ElevatedButton.icon(
+                onPressed: () => _showIssueCardDialog(context),
+                icon: const Icon(Icons.add_card),
+                label: const Text('Выпустить карту'),
+              ),
+            ],
+          ],
+        ),
+      );
     }
 
-    return ListView.builder(
-      padding: const EdgeInsets.only(
-        left: 16,
-        right: 16,
-        top: 16,
-        bottom: 110, // Space for floating bottom bar
-      ),
-      itemCount: products.length,
-      itemBuilder: (context, index) {
-        final product = products[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: AppTheme.primaryBlue.withOpacity(0.1),
-              child: Icon(
-                type == 'deposit'
-                    ? Icons.savings
-                    : type == 'loan'
-                    ? Icons.account_balance_wallet
-                    : Icons.credit_card,
-                color: AppTheme.primaryBlue,
+    return Stack(
+      children: [
+        ListView.builder(
+          padding: EdgeInsets.only(
+            left: 16,
+            right: 16,
+            top: 16,
+            bottom: type == 'card' ? 180 : 110, // Extra space for card button
+          ),
+          itemCount: products.length,
+          itemBuilder: (context, index) {
+            final product = products[index];
+            return Card(
+              margin: const EdgeInsets.only(bottom: 12),
+              child: ListTile(
+                leading: CircleAvatar(
+                  backgroundColor: AppTheme.primaryBlue.withOpacity(0.1),
+                  child: Icon(
+                    type == 'deposit'
+                        ? Icons.savings
+                        : type == 'loan'
+                        ? Icons.account_balance_wallet
+                        : Icons.credit_card,
+                    color: AppTheme.primaryBlue,
+                  ),
+                ),
+                title: Text(product.productName),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(product.description),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${ApiConfig.getBankName(product.bankCode)} • ${product.interestRate ?? '0'}%',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ],
+                ),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: () => _showProductDialog(context, product),
+              ),
+            );
+          },
+        ),
+        if (type == 'card')
+          Positioned(
+            left: 16,
+            right: 16,
+            bottom: 110,
+            child: ElevatedButton.icon(
+              onPressed: () => _showIssueCardDialog(context),
+              icon: const Icon(Icons.add_card),
+              label: const Text('Выпустить карту на существующий счет'),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                backgroundColor: AppTheme.accentBlue,
+                foregroundColor: Colors.white,
               ),
             ),
-            title: Text(product.productName),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(product.description),
-                const SizedBox(height: 4),
-                Text(
-                  '${ApiConfig.getBankName(product.bankCode)} • ${product.interestRate ?? '0'}%',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
-            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () => _showProductDialog(context, product),
           ),
-        );
-      },
+      ],
+    );
+  }
+
+  void _showIssueCardDialog(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (context) => const _IssueCardDialog(),
     );
   }
 
@@ -265,6 +308,142 @@ class _OpenProductDialogState extends State<_OpenProductDialog> {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Продукт успешно оформлен!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ошибка: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isProcessing = false);
+    }
+  }
+}
+
+// Issue Card Dialog
+class _IssueCardDialog extends StatefulWidget {
+  const _IssueCardDialog();
+
+  @override
+  State<_IssueCardDialog> createState() => _IssueCardDialogState();
+}
+
+class _IssueCardDialogState extends State<_IssueCardDialog> {
+  String? _selectedAccountId;
+  String? _selectedBank;
+  String _cardType = 'debit';
+  bool _isProcessing = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final accountProvider = context.watch<AccountProvider>();
+    final accounts = accountProvider.accounts;
+
+    // Get unique banks
+    final banks = accounts.map((a) => a.bankCode).toSet().toList();
+
+    return AlertDialog(
+      title: const Text('Выпустить карту'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Выберите счет для привязки карты',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _selectedBank,
+              decoration: const InputDecoration(labelText: 'Банк'),
+              items: banks.map<DropdownMenuItem<String>>((bank) {
+                return DropdownMenuItem<String>(
+                  value: bank,
+                  child: Text(ApiConfig.getBankName(bank)),
+                );
+              }).toList(),
+              onChanged: (value) {
+                setState(() {
+                  _selectedBank = value;
+                  _selectedAccountId = null; // Reset account selection
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            if (_selectedBank != null)
+              DropdownButtonFormField<String>(
+                value: _selectedAccountId,
+                decoration: const InputDecoration(labelText: 'Счет'),
+                items: accounts
+                    .where((a) => a.bankCode == _selectedBank)
+                    .map<DropdownMenuItem<String>>((account) {
+                  return DropdownMenuItem<String>(
+                    value: account.accountId,
+                    child: Text(account.displayName),
+                  );
+                }).toList(),
+                onChanged: (value) => setState(() => _selectedAccountId = value),
+              ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: _cardType,
+              decoration: const InputDecoration(labelText: 'Тип карты'),
+              items: const [
+                DropdownMenuItem(value: 'debit', child: Text('Дебетовая')),
+                DropdownMenuItem(value: 'credit', child: Text('Кредитная')),
+              ],
+              onChanged: (value) => setState(() => _cardType = value!),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _isProcessing ? null : () => Navigator.pop(context),
+          child: const Text('Отмена'),
+        ),
+        ElevatedButton(
+          onPressed: _isProcessing ? null : _submit,
+          child: _isProcessing
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Выпустить'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _submit() async {
+    if (_selectedAccountId == null || _selectedBank == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Выберите банк и счет')),
+      );
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+
+    try {
+      final authService = context.read<AuthService>();
+      final service = authService.getBankService(_selectedBank!);
+      final consent = await authService.getProductConsent(_selectedBank!);
+
+      await service.issueCard(
+        clientId: authService.clientId,
+        accountId: _selectedAccountId!,
+        cardType: _cardType,
+        consentId: consent.consentId,
+      );
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Карта успешно выпущена!')),
         );
       }
     } catch (e) {

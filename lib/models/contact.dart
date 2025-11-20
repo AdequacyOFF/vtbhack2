@@ -56,4 +56,13 @@ class Contact {
     }
     return clientId;
   }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Contact && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 }
