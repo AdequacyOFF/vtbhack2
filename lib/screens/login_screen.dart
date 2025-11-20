@@ -66,10 +66,10 @@ class _LoginScreenState extends State<LoginScreen> {
         pollingService.startPolling();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Некоторые банки требуют ручного подтверждения согласий'),
+            SnackBar(
+              content: const Text('Некоторые согласия требуют ручного подтверждения на сайте банка'),
               backgroundColor: AppTheme.warningOrange,
-              duration: Duration(seconds: 3),
+              duration: const Duration(seconds: 4),
             ),
           );
         }
@@ -155,11 +155,42 @@ class _LoginScreenState extends State<LoginScreen> {
                             ),
                           ),
                           const SizedBox(height: 16),
+                          const Text(
+                            'Быстрый выбор аккаунта:',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w500,
+                              color: Colors.grey,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              'team201-1',
+                              'team201-10',
+                              'team201-12',
+                              'team201-2',
+                              'team201-3',
+                            ].map((teamId) => ActionChip(
+                              label: Text(teamId),
+                              onPressed: _isLoading ? null : () {
+                                _clientIdController.text = teamId;
+                              },
+                              backgroundColor: AppTheme.accentBlue.withOpacity(0.1),
+                              labelStyle: const TextStyle(
+                                color: AppTheme.accentBlue,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            )).toList(),
+                          ),
+                          const SizedBox(height: 16),
                           TextField(
                             controller: _clientIdController,
                             decoration: const InputDecoration(
                               labelText: 'Client ID',
-                              hintText: 'Например: team201-10',
+                              hintText: 'Введите или выберите выше',
                               prefixIcon: Icon(Icons.person),
                             ),
                             enabled: !_isLoading,

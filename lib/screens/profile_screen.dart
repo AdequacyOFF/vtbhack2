@@ -8,6 +8,8 @@ import '../config/app_theme.dart';
 import 'login_screen.dart';
 import 'consent_management_screen.dart';
 import 'pdf_viewer_screen.dart';
+import 'contacts_screen.dart';
+import 'debts_screen.dart';
 
 class ProfileScreen extends StatelessWidget {
   const ProfileScreen({super.key});
@@ -181,6 +183,34 @@ class ProfileScreen extends StatelessWidget {
                 context,
                 MaterialPageRoute(
                   builder: (_) => const ConsentManagementScreen(),
+                ),
+              );
+            },
+          ),
+          _buildActionCard(
+            context,
+            icon: Icons.contacts_rounded,
+            title: 'Мои контакты',
+            subtitle: 'Сохраненные получатели для быстрых переводов',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const ContactsScreen(),
+                ),
+              );
+            },
+          ),
+          _buildActionCard(
+            context,
+            icon: Icons.account_balance_wallet_rounded,
+            title: 'Долги',
+            subtitle: 'Управление долгами и напоминания о возврате',
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const DebtsScreen(),
                 ),
               );
             },

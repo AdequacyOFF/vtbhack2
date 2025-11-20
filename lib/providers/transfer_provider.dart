@@ -22,6 +22,7 @@ class TransferProvider with ChangeNotifier {
     required BankAccount fromAccount,
     required BankAccount toAccount,
     required double amount,
+    String? comment,
   }) async {
     _isProcessing = true;
     _error = null;
@@ -47,6 +48,7 @@ class TransferProvider with ChangeNotifier {
         debtorAccountId: fromAccount.identification ?? fromAccount.accountId,
         creditorAccountId: toAccount.identification ?? toAccount.accountId,
         amount: amount,
+        comment: comment,
         currency: fromAccount.currency,
         creditorBankCode: isInterBank ? toAccount.bankCode : null,
         paymentConsentId: paymentConsent.consentId,

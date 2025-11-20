@@ -527,6 +527,91 @@ class BankApiService {
     });
   }
 
+  // Consent Revocation (GDPR requirement)
+  Future<bool> deleteAccountConsent(String consentId, String clientId) async {
+    print('[$bankCode] Revoking account consent: $consentId');
+
+    final token = await ensureValidToken();
+    final baseTeamId = clientId.contains('-') ? clientId.split('-')[0] : clientId;
+
+    return await _executeWithRetry(() async {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/account-consents/$consentId'),
+        headers: {
+          'Authorization': 'Bearer ${token.accessToken}',
+          'accept': 'application/json',
+          'x-fapi-interaction-id': baseTeamId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+      );
+
+      print('[$bankCode] Delete account consent response code: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        print('[$bankCode] Account consent successfully revoked');
+        return true;
+      } else {
+        throw Exception('Failed to revoke account consent for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<bool> deletePaymentConsent(String consentId, String clientId) async {
+    print('[$bankCode] Revoking payment consent: $consentId');
+
+    final token = await ensureValidToken();
+    final baseTeamId = clientId.contains('-') ? clientId.split('-')[0] : clientId;
+
+    return await _executeWithRetry(() async {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/payment-consents/$consentId'),
+        headers: {
+          'Authorization': 'Bearer ${token.accessToken}',
+          'accept': 'application/json',
+          'x-fapi-interaction-id': baseTeamId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+      );
+
+      print('[$bankCode] Delete payment consent response code: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        print('[$bankCode] Payment consent successfully revoked');
+        return true;
+      } else {
+        throw Exception('Failed to revoke payment consent for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<bool> deleteProductAgreementConsent(String consentId, String clientId) async {
+    print('[$bankCode] Revoking product agreement consent: $consentId');
+
+    final token = await ensureValidToken();
+    final baseTeamId = clientId.contains('-') ? clientId.split('-')[0] : clientId;
+
+    return await _executeWithRetry(() async {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/product-agreement-consents/$consentId'),
+        headers: {
+          'Authorization': 'Bearer ${token.accessToken}',
+          'accept': 'application/json',
+          'x-fapi-interaction-id': baseTeamId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+      );
+
+      print('[$bankCode] Delete product consent response code: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        print('[$bankCode] Product agreement consent successfully revoked');
+        return true;
+      } else {
+        throw Exception('Failed to revoke product agreement consent for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
 
   // Accounts
   Future<List<BankAccount>> getAccounts(String clientId, String consentId) async {
@@ -631,6 +716,120 @@ class BankApiService {
     }
   }
 
+  // Account Management
+  Future<Map<String, dynamic>> createAccount({
+    required String clientId,
+    required String accountType,
+    required String currency,
+    String? accountName,
+    String? consentId,
+  }) async {
+    print('[$bankCode] Creating new account for client: $clientId');
+
+    final token = await ensureValidToken();
+
+    final body = {
+      'account_type': accountType,
+      'currency': currency,
+      if (accountName != null) 'account_name': accountName,
+    };
+
+    return await _executeWithRetry(() async {
+      final response = await http.post(
+        Uri.parse('$baseUrl/accounts?client_id=$clientId'),
+        headers: {
+          ..._authHeaders(token),
+          if (consentId != null) 'x-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+        body: jsonEncode(body),
+      );
+
+      print('[$bankCode] Create account response code: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print('[$bankCode] Account successfully created');
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to create account for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<Map<String, dynamic>> closeAccount({
+    required String accountId,
+    required String clientId,
+    String? transferToAccountId,
+    bool donateToBank = false,
+    String? consentId,
+  }) async {
+    print('[$bankCode] Closing account: $accountId');
+
+    final token = await ensureValidToken();
+
+    final body = {
+      if (transferToAccountId != null) 'transfer_to_account_id': transferToAccountId,
+      'donate_to_bank': donateToBank,
+    };
+
+    return await _executeWithRetry(() async {
+      final response = await http.put(
+        Uri.parse('$baseUrl/accounts/$accountId/close?client_id=$clientId'),
+        headers: {
+          ..._authHeaders(token),
+          if (consentId != null) 'x-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+        body: jsonEncode(body),
+      );
+
+      print('[$bankCode] Close account response code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        print('[$bankCode] Account successfully closed');
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to close account for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<Map<String, dynamic>> updateAccountStatus({
+    required String accountId,
+    required String clientId,
+    required String status,
+    String? consentId,
+  }) async {
+    print('[$bankCode] Updating account status: $accountId to $status');
+
+    final token = await ensureValidToken();
+
+    final body = {
+      'status': status,
+    };
+
+    return await _executeWithRetry(() async {
+      final response = await http.put(
+        Uri.parse('$baseUrl/accounts/$accountId/status?client_id=$clientId'),
+        headers: {
+          ..._authHeaders(token),
+          if (consentId != null) 'x-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+        body: jsonEncode(body),
+      );
+
+      print('[$bankCode] Update account status response code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        print('[$bankCode] Account status successfully updated');
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to update account status for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
   // Products
   Future<List<BankProduct>> getProducts({String? productType}) async {
     final token = await ensureValidToken();
@@ -711,6 +910,109 @@ class BankApiService {
     }
   }
 
+  Future<List<Map<String, dynamic>>> getProductAgreements({
+    required String clientId,
+    required String consentId,
+    String? productType,
+    String? status,
+  }) async {
+    print('[$bankCode] Getting product agreements for client: $clientId');
+
+    final token = await ensureValidToken();
+
+    final queryParams = {
+      'client_id': clientId,
+      if (productType != null) 'product_type': productType,
+      if (status != null) 'status': status,
+    };
+
+    final uri = Uri.parse('$baseUrl/product-agreements')
+        .replace(queryParameters: queryParams);
+
+    return await _executeWithRetry(() async {
+      final response = await http.get(
+        uri,
+        headers: {
+          ..._authHeaders(token),
+          'x-product-agreement-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+      );
+
+      print('[$bankCode] Get product agreements response code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        final agreements = (json['data']['agreements'] ?? json['data']['product_agreements'] ?? []) as List;
+        print('[$bankCode] Found ${agreements.length} product agreements');
+        return agreements.cast<Map<String, dynamic>>();
+      } else {
+        throw Exception('Failed to get product agreements for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<Map<String, dynamic>> getProductAgreement({
+    required String agreementId,
+    required String clientId,
+    required String consentId,
+  }) async {
+    print('[$bankCode] Getting product agreement: $agreementId');
+
+    final token = await ensureValidToken();
+
+    return await _executeWithRetry(() async {
+      final response = await http.get(
+        Uri.parse('$baseUrl/product-agreements/$agreementId?client_id=$clientId'),
+        headers: {
+          ..._authHeaders(token),
+          'x-product-agreement-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+      );
+
+      print('[$bankCode] Get product agreement response code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return json['data'] ?? json;
+      } else {
+        throw Exception('Failed to get product agreement for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<Map<String, dynamic>> closeProductAgreement({
+    required String agreementId,
+    required String clientId,
+    required String consentId,
+    bool earlyTermination = false,
+  }) async {
+    print('[$bankCode] Closing product agreement: $agreementId');
+
+    final token = await ensureValidToken();
+
+    return await _executeWithRetry(() async {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/product-agreements/$agreementId?client_id=$clientId&early_termination=$earlyTermination'),
+        headers: {
+          ..._authHeaders(token),
+          'x-product-agreement-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+      );
+
+      print('[$bankCode] Close product agreement response code: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        print('[$bankCode] Product agreement successfully closed');
+        return response.statusCode == 200 ? jsonDecode(response.body) : {'status': 'closed'};
+      } else {
+        throw Exception('Failed to close product agreement for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
   // Payments
   Future<Map<String, dynamic>> createPayment({
     required String clientId,
@@ -720,6 +1022,7 @@ class BankApiService {
     String currency = 'RUB',
     String? creditorBankCode,
     String? paymentConsentId,
+    String? comment,
   }) async {
     final token = await ensureValidToken();
 
@@ -739,6 +1042,7 @@ class BankApiService {
             'identification': creditorAccountId,
             if (creditorBankCode != null) 'bank_code': creditorBankCode,
           },
+          if (comment != null && comment.isNotEmpty) 'comment': comment,
         },
       },
     };
@@ -775,5 +1079,213 @@ class BankApiService {
     } else {
       throw Exception('Failed to get payment status: ${response.body}');
     }
+  }
+
+  // Card Management
+  Future<List<Map<String, dynamic>>> getCards({
+    required String clientId,
+    required String consentId,
+  }) async {
+    print('[$bankCode] Getting cards for client: $clientId');
+
+    final token = await ensureValidToken();
+
+    return await _executeWithRetry(() async {
+      final response = await http.get(
+        Uri.parse('$baseUrl/cards?client_id=$clientId'),
+        headers: {
+          ..._authHeaders(token),
+          'x-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+      );
+
+      print('[$bankCode] Get cards response code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        final cards = (json['data']['cards'] ?? json['data']['card'] ?? []) as List;
+        print('[$bankCode] Found ${cards.length} cards');
+        return cards.cast<Map<String, dynamic>>();
+      } else {
+        throw Exception('Failed to get cards for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<Map<String, dynamic>> issueCard({
+    required String clientId,
+    required String accountId,
+    required String cardType,
+    required String consentId,
+    String? cardName,
+    Map<String, double>? limits,
+  }) async {
+    print('[$bankCode] Issuing new card for client: $clientId');
+
+    final token = await ensureValidToken();
+
+    final body = {
+      'account_id': accountId,
+      'card_type': cardType,
+      if (cardName != null) 'card_name': cardName,
+      if (limits != null) 'limits': limits,
+    };
+
+    return await _executeWithRetry(() async {
+      final response = await http.post(
+        Uri.parse('$baseUrl/cards?client_id=$clientId'),
+        headers: {
+          ..._authHeaders(token),
+          'x-product-agreement-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+        body: jsonEncode(body),
+      );
+
+      print('[$bankCode] Issue card response code: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        print('[$bankCode] Card successfully issued');
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to issue card for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<Map<String, dynamic>> getCard({
+    required String cardId,
+    required String clientId,
+    required String consentId,
+  }) async {
+    print('[$bankCode] Getting card details: $cardId');
+
+    final token = await ensureValidToken();
+
+    return await _executeWithRetry(() async {
+      final response = await http.get(
+        Uri.parse('$baseUrl/cards/$cardId?client_id=$clientId'),
+        headers: {
+          ..._authHeaders(token),
+          'x-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+      );
+
+      print('[$bankCode] Get card response code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body);
+        return json['data'] ?? json;
+      } else {
+        throw Exception('Failed to get card for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<Map<String, dynamic>> deleteCard({
+    required String cardId,
+    required String clientId,
+    required String consentId,
+    bool reissue = false,
+  }) async {
+    print('[$bankCode] Deleting card: $cardId (reissue: $reissue)');
+
+    final token = await ensureValidToken();
+
+    return await _executeWithRetry(() async {
+      final response = await http.delete(
+        Uri.parse('$baseUrl/cards/$cardId?client_id=$clientId&reissue=$reissue'),
+        headers: {
+          ..._authHeaders(token),
+          'x-product-agreement-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+      );
+
+      print('[$bankCode] Delete card response code: ${response.statusCode}');
+
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        print('[$bankCode] Card successfully deleted');
+        return response.statusCode == 200 ? jsonDecode(response.body) : {'status': 'deleted'};
+      } else {
+        throw Exception('Failed to delete card for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<Map<String, dynamic>> updateCardLimits({
+    required String cardId,
+    required String clientId,
+    required String consentId,
+    required Map<String, double> limits,
+  }) async {
+    print('[$bankCode] Updating card limits: $cardId');
+
+    final token = await ensureValidToken();
+
+    final body = {
+      'limits': limits,
+    };
+
+    return await _executeWithRetry(() async {
+      final response = await http.put(
+        Uri.parse('$baseUrl/cards/$cardId/limits?client_id=$clientId'),
+        headers: {
+          ..._authHeaders(token),
+          'x-product-agreement-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+        body: jsonEncode(body),
+      );
+
+      print('[$bankCode] Update card limits response code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        print('[$bankCode] Card limits successfully updated');
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to update card limits for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
+  }
+
+  Future<Map<String, dynamic>> updateCardStatus({
+    required String cardId,
+    required String clientId,
+    required String consentId,
+    required String status,
+    String? reason,
+  }) async {
+    print('[$bankCode] Updating card status: $cardId to $status');
+
+    final token = await ensureValidToken();
+
+    final body = {
+      'status': status,
+      if (reason != null) 'reason': reason,
+    };
+
+    return await _executeWithRetry(() async {
+      final response = await http.put(
+        Uri.parse('$baseUrl/cards/$cardId/status?client_id=$clientId'),
+        headers: {
+          ..._authHeaders(token),
+          'x-product-agreement-consent-id': consentId,
+          'x-requesting-bank': ApiConfig.clientId,
+        },
+        body: jsonEncode(body),
+      );
+
+      print('[$bankCode] Update card status response code: ${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        print('[$bankCode] Card status successfully updated');
+        return jsonDecode(response.body);
+      } else {
+        throw Exception('Failed to update card status for $bankCode. Status: ${response.statusCode}. Body: ${response.body}');
+      }
+    });
   }
 }
