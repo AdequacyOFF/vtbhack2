@@ -25,10 +25,13 @@ class _VirtualAccountsScreenState extends State<VirtualAccountsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppTheme.backgroundLight,
       appBar: AppBar(
         title: const Text('Виртуальные счета'),
+        backgroundColor: AppTheme.darkBlue,
+        foregroundColor: Colors.white,
         elevation: 0,
+        centerTitle: true,
       ),
       body: Consumer<VirtualAccountProvider>(
         builder: (context, provider, child) {

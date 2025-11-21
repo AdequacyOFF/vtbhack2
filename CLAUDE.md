@@ -59,15 +59,63 @@ flutter run -v
 
 # Clear build cache (if encountering issues)
 flutter clean && flutter pub get
+
+# Run with clean app data (clears SharedPreferences, resets consents)
+flutter run --clear
 ```
+
+**Note**: The `--clear` flag is useful when testing consent flows or resetting local storage (contacts, debts, virtual accounts). It does NOT clear `flutter_secure_storage` (tokens remain encrypted on device).
 
 ## Architecture & Key Concepts
 
 ### Service Layer Pattern
 The app follows a clean architecture with three main layers:
-- **Services**: Business logic and API communication (auth, bank API, consent polling, notifications, expenses optimization, **secure storage**)
+- **Services**: Business logic and API communication (auth, bank API, consent polling, notifications, expenses optimization, **secure storage**, contacts, debts, analytics, news, PDF generation, MCC categorization)
 - **Providers**: State management using Provider pattern (account, product, transfer, news, virtual accounts)
 - **Screens**: UI components
+
+### Provider Dependency Chain
+```
+AuthService (singleton)
+  ↓
+├─→ ConsentPollingService (ProxyProvider)
+├─→ AccountProvider (depends on AuthService + NotificationService)
+├─→ ProductProvider (depends on AuthService + NotificationService)
+└─→ TransferProvider (depends on AuthService + NotificationService)
+
+NotificationService (singleton)
+  ↓
+└─→ VirtualAccountProvider (depends on NotificationService)
+
+NewsProvider (standalone)
+```
+
+**Important**: Most providers depend on `AuthService` to access bank tokens and consent IDs. Always ensure `AuthService` is initialized before using dependent providers.
+
+### Data Persistence Strategy
+
+The app uses two storage mechanisms with different security levels:
+
+**Flutter Secure Storage** (encrypted, hardware-backed):
+- Bank access tokens
+- Bank refresh tokens
+- All consent IDs (account, payment, product)
+- Client ID and client secret
+- ❌ Cannot be accessed by `--clear` flag
+
+**SharedPreferences** (plaintext, unencrypted):
+- Contacts list
+- Debts records
+- Virtual accounts & budgets
+- News preferences (liked/disliked articles)
+- Analytics data (transaction categories)
+- ✅ Cleared by `--clear` flag
+
+**In-Memory Only** (lost on app restart):
+- Accounts, balances, transactions
+- Products (deposits, loans, cards)
+- Notifications
+- Re-fetched automatically on login via `AccountProvider.fetchAllAccounts()`
 
 ### Critical Implementation Details
 
@@ -398,6 +446,74 @@ final validDeposits = babankDeposits.where((p) {
 - No valid deposits → Amount doesn't match deposit limits
 - Product consent missing → Automatically creates if needed
 
+#### 13. Contacts Management System
+
+**ContactsService** manages a local address book for quick transfers to frequent recipients:
+- **Storage**: Persisted to `SharedPreferences` as JSON
+- **Contact structure**: Client ID (team201-10), name, optional bank/account info
+- **UUID generation**: Each contact gets unique ID for tracking
+
+**Key operations:**
+```dart
+// Add new contact
+final contact = await contactsService.addContact(
+  clientId: 'team201-5',
+  name: 'Иван Иванов',
+  bankCode: 'vbank', // optional
+  accountId: 'acc123', // optional
+);
+
+// Get all contacts
+final contacts = contactsService.getAllContacts();
+
+// Update/delete
+await contactsService.updateContact(contactId, name: 'New Name');
+await contactsService.deleteContact(contactId);
+```
+
+**Display helpers:**
+- `contact.displayName` → "Иван Иванов (VBANK)"
+- `contact.description` → "VBANK • acc123..."
+
+**Integration**: Contacts screen (`contacts_screen.dart`) provides UI for CRUD operations. Transfer screen uses contacts for recipient selection.
+
+#### 14. Debts Tracking System
+
+**DebtsService** tracks money borrowed and lent between contacts:
+- **Two debt types**:
+  - `DebtType.iOwe` → "Я должен" (I borrowed)
+  - `DebtType.owedToMe` → "Мне должны" (I lent)
+- **Storage**: Persisted to `SharedPreferences` as JSON
+- **Features**: Amount, currency, return date, comments, repayment status
+
+**Key operations:**
+```dart
+// Record a debt
+final debt = await debtsService.addDebt(
+  contactId: contact.id,
+  contactName: contact.name,
+  contactClientId: contact.clientId,
+  amount: 5000.0,
+  type: DebtType.owedToMe,
+  returnDate: DateTime.now().add(Duration(days: 30)),
+  comment: 'Loan for vacation',
+);
+
+// Mark as returned
+await debtsService.markAsReturned(debtId);
+
+// Get statistics
+final stats = debtsService.getDebtStatistics();
+// Returns: totalOwed, totalLent, overdueDebts
+```
+
+**Smart features:**
+- `debt.isOverdue` → Automatically checks if past return date
+- `debt.daysUntilReturn` → Calculates remaining days
+- `debt.statusDescription` → "Сегодня", "Завтра", "Просрочен", etc.
+
+**Integration**: Debts screen (`debts_screen.dart`) provides dashboard with filtering by type and status. Supports quick repayment via transfer screen.
+
 ## API Configuration
 
 ### Bank API Base URLs
@@ -492,18 +608,39 @@ placemark.setIconStyle(IconStyle(scale: 0.15));
 
 ## Important Files to Review
 
+### Configuration & Initialization
 - `lib/config/api_config.dart` - Team credentials, bank URLs, API keys
+- `lib/main.dart` - App initialization and provider setup
+
+### Services (Business Logic)
 - `lib/services/auth_service.dart` - Central auth & consent management
+- `lib/services/secure_storage_service.dart` - Encrypted storage for tokens/credentials
 - `lib/services/bank_api_service.dart` - All bank API calls with retry logic
 - `lib/services/consent_polling_service.dart` - Automatic consent approval polling
 - `lib/services/expenses_optimization_service.dart` - ML-powered spending advice
 - `lib/services/mcc_category_service.dart` - MCC code to category mapping
+- `lib/services/contacts_service.dart` - Local contact address book management
+- `lib/services/debts_service.dart` - Debt tracking between contacts
+- `lib/services/news_service.dart` - Personalized news from ML service
+- `lib/services/analytics_service.dart` - Transaction categorization & analysis
+- `lib/services/pdf_service.dart` - Bank statement generation
+- `lib/services/notification_service.dart` - In-app notification system
+
+### Providers (State Management)
 - `lib/providers/account_provider.dart` - Account/balance/transaction state (`accounts` not `allAccounts`)
 - `lib/providers/product_provider.dart` - Product management and deposit/loan creation
+- `lib/providers/transfer_provider.dart` - Transfer operations between accounts
 - `lib/providers/virtual_account_provider.dart` - Virtual budgeting accounts
+- `lib/providers/news_provider.dart` - News feed with like/dislike functionality
+
+### Key Screens
+- `lib/screens/home_screen.dart` - Dashboard with all accounts aggregated
 - `lib/screens/expenses_optimization_screen.dart` - ML recommendations + one-click deposit
+- `lib/screens/virtual_accounts_screen.dart` - Budget management interface
+- `lib/screens/contacts_screen.dart` - Contact management for quick transfers
+- `lib/screens/debts_screen.dart` - Debt tracking dashboard
 - `lib/screens/atm_map_screen.dart` - Yandex Maps integration with bank markers
-- `lib/main.dart` - App initialization and provider setup
+- `lib/screens/my_agreements_screen.dart` - View active deposits/loans/cards
 
 ## Testing
 
@@ -532,6 +669,82 @@ try {
 ### Network Errors
 All handled automatically by `_executeWithRetry` in `BankApiService`. Throws after 3 failed attempts with exponential backoff.
 
+## UI/UX Best Practices
+
+### Modern Styled Notifications
+Always use `AppTheme` styled SnackBars instead of basic `SnackBar`:
+```dart
+// Good - Modern styled notifications
+ScaffoldMessenger.of(context).showSnackBar(
+  AppTheme.successSnackBar('Operation successful!'),
+);
+ScaffoldMessenger.of(context).showSnackBar(
+  AppTheme.errorSnackBar('Error occurred'),
+);
+ScaffoldMessenger.of(context).showSnackBar(
+  AppTheme.warningSnackBar('Please check inputs'),
+);
+
+// Bad - Basic SnackBar
+ScaffoldMessenger.of(context).showSnackBar(
+  const SnackBar(content: Text('Message')),
+);
+```
+
+### Dialog Styling
+All confirmation dialogs should use modern gradient style:
+```dart
+Dialog(
+  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+  child: Container(
+    padding: const EdgeInsets.all(24),
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        colors: [Colors.white, AppTheme.iceBlue],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ),
+      borderRadius: BorderRadius.circular(24),
+    ),
+    // ... content with icon header and gradient buttons
+  ),
+)
+```
+
+### Dropdown Overflow Prevention
+When displaying account info in dropdowns, use compact layout to prevent overflow:
+```dart
+DropdownButtonFormField<String>(
+  isExpanded: true,  // Always set for long text
+  items: accounts.map((account) {
+    return DropdownMenuItem(
+      child: Text(
+        '${account.displayName} • ${ApiConfig.getBankName(account.bankCode)}',
+        maxLines: 1,  // Prevent multi-line
+        overflow: TextOverflow.ellipsis,  // Show ellipsis
+        style: const TextStyle(
+          fontSize: 12,  // Smaller font to fit
+          height: 1.0,  // Tight line height
+        ),
+      ),
+    );
+  }).toList(),
+)
+```
+
+### Account Identification
+**CRITICAL**: When passing account IDs to banking APIs, always use `identification` field, not `accountId`:
+```dart
+// Correct - Use identification for API calls
+final sourceAccountIdentifier = selectedAccount.identification ?? _selectedAccountId;
+await service.openProductAgreement(sourceAccountId: sourceAccountIdentifier);
+
+// Wrong - Using internal accountId causes "account not found" errors
+await service.openProductAgreement(sourceAccountId: _selectedAccountId);  // ❌
+```
+
+The `accountId` (e.g., "acc-4548") is an internal ID. The `identification` field contains the actual account number required by banking APIs.
+
 ## Code Style Notes
 
 - Use underscore prefix for private members: `_balances`, `_fetchData()`
@@ -539,3 +752,26 @@ All handled automatically by `_executeWithRetry` in `BankApiService`. Throws aft
 - Notification types: `success`, `info`, `warning`, `error`
 - Date format: ISO 8601 strings from API, convert to DateTime for display
 - Bank codes: Always lowercase (`vbank`, `abank`, `sbank`, `babank`)
+
+## Known Issues & Solutions
+
+### My Products Section Empty
+If "Мои продукты" (My Products) screen shows no data:
+1. Ensure product consents are approved for all banks
+2. Verify `my_agreements_screen.dart` queries all 4 banks: `['vbank', 'abank', 'sbank', 'babank']`
+3. Check console logs for API errors: `[MyAgreements]` prefix
+4. Confirm products were actually created successfully
+
+### RenderFlex Overflow in Dropdowns
+If dropdown items overflow:
+1. Reduce font sizes (12px for main text, 11px for secondary)
+2. Set `height: 1.0` in TextStyle for tight line spacing
+3. Remove SizedBox spacing between Text widgets
+4. Use `maxLines: 1` and `overflow: TextOverflow.ellipsis`
+5. Set `isExpanded: true` on DropdownButtonFormField
+
+### Header Colors Inconsistent
+All screen headers should use `AppTheme.darkBlue`:
+- AppBar: `backgroundColor: AppTheme.darkBlue, foregroundColor: Colors.white`
+- Section headers: `color: AppTheme.darkBlue`
+- Always set `centerTitle: true` for consistency

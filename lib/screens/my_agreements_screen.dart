@@ -33,10 +33,15 @@ class _MyAgreementsScreenState extends State<MyAgreementsScreen> {
       final clientId = authService.clientId;
       final agreements = <String, List<Map<String, dynamic>>>{};
 
-      for (final bankCode in ['vbank', 'abank', 'sbank']) {
+      debugPrint('[MyAgreements] Starting to load product agreements for client: $clientId');
+
+      for (final bankCode in ['vbank', 'abank', 'sbank', 'babank']) {
         try {
           final service = authService.getBankService(bankCode);
+
+          // Get product consent (will create if missing)
           final consent = await authService.getProductConsent(bankCode);
+          debugPrint('[$bankCode] Product consent status: ${consent.status}');
 
           if (consent.isApproved) {
             final bankAgreements = await service.getProductAgreements(
@@ -44,18 +49,31 @@ class _MyAgreementsScreenState extends State<MyAgreementsScreen> {
               consentId: consent.consentId,
             );
             agreements[bankCode] = bankAgreements;
+            debugPrint('[$bankCode] Loaded ${bankAgreements.length} product agreements');
+
+            // Debug: print first agreement details if available
+            if (bankAgreements.isNotEmpty) {
+              debugPrint('[$bankCode] Sample agreement: ${bankAgreements.first}');
+            }
+          } else {
+            debugPrint('[$bankCode] Product consent not approved: ${consent.status}');
+            agreements[bankCode] = [];
           }
         } catch (e) {
-          debugPrint('Error loading agreements from $bankCode: $e');
+          debugPrint('[$bankCode] Error loading agreements: $e');
           agreements[bankCode] = [];
         }
       }
+
+      final totalAgreements = agreements.values.fold(0, (sum, list) => sum + list.length);
+      debugPrint('[MyAgreements] Total agreements loaded: $totalAgreements');
 
       setState(() {
         _agreementsByBank = agreements;
         _isLoading = false;
       });
     } catch (e) {
+      debugPrint('[MyAgreements] Fatal error: $e');
       setState(() {
         _error = e.toString();
         _isLoading = false;

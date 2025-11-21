@@ -48,10 +48,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     pollingService.onConsentApproved((bankCode) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✓ Согласие одобрено: ${ApiConfig.getBankName(bankCode)}'),
-            backgroundColor: AppTheme.successGreen,
-            duration: const Duration(seconds: 3),
+          AppTheme.successSnackBar(
+            '✓ Согласие одобрено: ${ApiConfig.getBankName(bankCode)}',
           ),
         );
 
@@ -103,10 +101,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
             .join(', ');
 
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('✓ Согласия одобрены: $bankNames'),
-            backgroundColor: AppTheme.successGreen,
-            duration: const Duration(seconds: 4),
+          AppTheme.successSnackBar(
+            '✓ Согласия одобрены: $bankNames',
           ),
         );
       }
@@ -145,11 +141,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
 
         if (mounted && successCount > 0) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Автоматически созданы согласия: $successCount из $totalCount'),
-              backgroundColor: successCount == totalCount ? AppTheme.successGreen : AppTheme.warningOrange,
-              duration: const Duration(seconds: 3),
-            ),
+            successCount == totalCount
+                ? AppTheme.successSnackBar('Автоматически созданы согласия: $successCount из $totalCount')
+                : AppTheme.warningSnackBar('Автоматически созданы согласия: $successCount из $totalCount'),
           );
         }
       } else {

@@ -13,6 +13,7 @@ class AppNotification {
   final String message;
   final NotificationType type;
   final DateTime timestamp;
+  final bool isImportant;
   bool isUnread;
 
   AppNotification({
@@ -22,6 +23,7 @@ class AppNotification {
     DateTime? timestamp,
     String? id,
     this.isUnread = true,
+    this.isImportant = false,
   })  : id = id ?? DateTime.now().millisecondsSinceEpoch.toString(),
         timestamp = timestamp ?? DateTime.now();
 }
@@ -37,11 +39,13 @@ class NotificationService extends ChangeNotifier {
     required String title,
     required String message,
     NotificationType type = NotificationType.info,
+    bool isImportant = false,
   }) {
     _notifications.add(AppNotification(
       title: title,
       message: message,
       type: type,
+      isImportant: isImportant,
     ));
     notifyListeners();
   }
@@ -50,6 +54,16 @@ class NotificationService extends ChangeNotifier {
     final index = _notifications.indexWhere((n) => n.id == id);
     if (index != -1) {
       _notifications[index].isUnread = false;
+
+      // Auto-delete unimportant notifications after marking as read
+      if (!_notifications[index].isImportant) {
+        // Remove after 2 seconds to allow user to see the change
+        Future.delayed(const Duration(seconds: 2), () {
+          _notifications.removeWhere((n) => n.id == id);
+          notifyListeners();
+        });
+      }
+
       notifyListeners();
     }
   }
@@ -63,4 +77,14 @@ class NotificationService extends ChangeNotifier {
     _notifications.clear();
     notifyListeners();
   }
+
+  // Auto-delete all read unimportant notifications
+  void autoDeleteReadUnimportant() {
+    _notifications.removeWhere((n) => !n.isUnread && !n.isImportant);
+    notifyListeners();
+  }
+
+  // Get count of notifications that can be auto-deleted
+  int get autoDeleteableCount =>
+      _notifications.where((n) => !n.isUnread && !n.isImportant).length;
 }

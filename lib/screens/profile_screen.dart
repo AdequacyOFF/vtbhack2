@@ -1288,7 +1288,7 @@ class _CategoryInterestsScreenState extends State<CategoryInterestsScreen> {
                                           style: const TextStyle(
                                             fontSize: 15,
                                             fontWeight: FontWeight.w600,
-                                            color: AppTheme.textPrimary,
+                                            color: AppTheme.darkBlue,
                                           ),
                                         ),
                                       ),

@@ -10,6 +10,7 @@ import '../services/contacts_service.dart';
 import '../services/debts_service.dart';
 import '../services/auth_service.dart';
 import '../config/app_theme.dart';
+import '../config/api_config.dart';
 
 enum TransferType {
   ownAccounts,
@@ -415,24 +416,25 @@ class _TransferScreenState extends State<TransferScreen> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
-                              account.displayName,
-                              maxLines: 2,
+                              '${account.displayName} • ${ApiConfig.getBankName(account.bankCode)}',
+                              maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              softWrap: true,
+                              softWrap: false,
                               style: const TextStyle(
-                                fontSize: 13,
+                                fontSize: 12,
                                 fontWeight: FontWeight.w600,
                                 color: AppTheme.textPrimary,
+                                height: 1.0,
                               ),
                             ),
-                            const SizedBox(height: 2),
                             Text(
                               '${balance.toStringAsFixed(2)} ${account.currency}',
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                fontSize: 12,
+                                fontSize: 11,
                                 color: AppTheme.textSecondary,
+                                height: 1.0,
                               ),
                             ),
                           ],
@@ -587,24 +589,25 @@ class _TransferScreenState extends State<TransferScreen> {
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    account.displayName,
-                                    maxLines: 2,
+                                    '${account.displayName} • ${ApiConfig.getBankName(account.bankCode)}',
+                                    maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
-                                    softWrap: true,
+                                    softWrap: false,
                                     style: const TextStyle(
-                                      fontSize: 13,
+                                      fontSize: 12,
                                       fontWeight: FontWeight.w600,
                                       color: AppTheme.textPrimary,
+                                      height: 1.0,
                                     ),
                                   ),
-                                  const SizedBox(height: 2),
                                   Text(
                                     '${balance.toStringAsFixed(2)} ${account.currency}',
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
-                                      fontSize: 12,
+                                      fontSize: 11,
                                       color: AppTheme.textSecondary,
+                                      height: 1.0,
                                     ),
                                   ),
                                 ],
@@ -1042,7 +1045,7 @@ class _TransferScreenState extends State<TransferScreen> {
 
     if (_fromAccount == null || amount == null || amount <= 0) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Заполните все обязательные поля')),
+        AppTheme.warningSnackBar('Заполните все обязательные поля'),
       );
       return;
     }
@@ -1055,14 +1058,14 @@ class _TransferScreenState extends State<TransferScreen> {
     if (_transferType == TransferType.ownAccounts) {
       if (_toAccount == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Выберите счёт получателя')),
+          AppTheme.warningSnackBar('Выберите счёт получателя'),
         );
         return;
       }
 
       if (_fromAccount!.accountId == _toAccount!.accountId) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Выберите разные счета')),
+          AppTheme.warningSnackBar('Выберите разные счета'),
         );
         return;
       }
@@ -1072,7 +1075,7 @@ class _TransferScreenState extends State<TransferScreen> {
     } else if (_transferType == TransferType.toContact) {
       if (_selectedContact == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Выберите контакт')),
+          AppTheme.warningSnackBar('Выберите контакт'),
         );
         return;
       }
@@ -1080,7 +1083,7 @@ class _TransferScreenState extends State<TransferScreen> {
       if (_selectedContact!.accountId == null ||
           _selectedContact!.accountId!.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('У контакта не указан номер счёта')),
+          AppTheme.warningSnackBar('У контакта не указан номер счёта'),
         );
         return;
       }
@@ -1094,10 +1097,7 @@ class _TransferScreenState extends State<TransferScreen> {
           _recipientAccountController.text.trim().isEmpty ||
           _selectedRecipientBank == null) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content:
-            Text('Укажите Client ID, номер счёта и банк получателя'),
-          ),
+          AppTheme.warningSnackBar('Укажите Client ID, номер счёта и банк получателя'),
         );
         return;
       }
@@ -1109,7 +1109,7 @@ class _TransferScreenState extends State<TransferScreen> {
       if (_saveAsContact &&
           _recipientNameController.text.trim().isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Укажите имя контакта')),
+          AppTheme.warningSnackBar('Укажите имя контакта'),
         );
         return;
       }
@@ -1121,80 +1121,179 @@ class _TransferScreenState extends State<TransferScreen> {
 
     if (_isDebt && _returnDate == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Укажите дату возврата долга')),
+        AppTheme.warningSnackBar('Укажите дату возврата долга'),
       );
       return;
     }
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (context) => AlertDialog(
+      builder: (context) => Dialog(
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(24),
         ),
-        title: const Text('Подтверждение перевода'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Сумма: ${amount.toStringAsFixed(2)} ₽'),
-            Text('Со счёта: ${_fromAccount!.displayName}'),
-            Text(
-              'Получатель: ${recipientName ?? recipientClientId ?? recipientAccountId}',
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                Colors.white,
+                AppTheme.iceBlue,
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
             ),
-            if (recipientBank != null)
-              Text('Банк: ${recipientBank.toUpperCase()}'),
-            if (_commentController.text.isNotEmpty)
-              Text('Комментарий: ${_commentController.text}'),
-            if (_isDebt) ...[
-              const SizedBox(height: 8),
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.accentGradient,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: const Icon(
+                      Icons.check_circle_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  const Expanded(
+                    child: Text(
+                      'Подтверждение перевода',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
               Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: AppTheme.warningOrange.withOpacity(0.08),
-                  borderRadius: BorderRadius.circular(8),
-                ),
+                padding: const EdgeInsets.all(16),
+                decoration: AppTheme.modernCardDecoration(borderRadius: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.calendar_month_rounded,
-                          size: 16,
-                          color: AppTheme.warningOrange,
-                        ),
-                        SizedBox(width: 4),
-                        Text(
-                          'Долг',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
-                    Text(
-                      'Дата возврата: ${_returnDate!.day}.${_returnDate!.month}.${_returnDate!.year}',
-                      style: const TextStyle(fontSize: 13),
-                    ),
+                    _buildInfoRow('Сумма', '${amount.toStringAsFixed(2)} ₽', Icons.payments_rounded),
+                    const Divider(height: 24),
+                    _buildInfoRow('Со счёта', '${_fromAccount!.displayName} • ${ApiConfig.getBankName(_fromAccount!.bankCode)}', Icons.account_balance_wallet_rounded),
+                    const Divider(height: 24),
+                    _buildInfoRow('Получатель', recipientName ?? recipientClientId ?? recipientAccountId ?? '', Icons.person_rounded),
+                    if (recipientBank != null) ...[
+                      const Divider(height: 24),
+                      _buildInfoRow('Банк', ApiConfig.getBankName(recipientBank), Icons.account_balance_rounded),
+                    ],
+                    if (_commentController.text.isNotEmpty) ...[
+                      const Divider(height: 24),
+                      _buildInfoRow('Комментарий', _commentController.text, Icons.comment_rounded),
+                    ],
                   ],
                 ),
               ),
+              if (_isDebt) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: AppTheme.warningOrange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppTheme.warningOrange.withValues(alpha: 0.3),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.calendar_month_rounded,
+                        color: AppTheme.warningOrange,
+                        size: 24,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Долг',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 14,
+                                color: AppTheme.warningOrange,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              'Дата возврата: ${_returnDate!.day}.${_returnDate!.month}.${_returnDate!.year}',
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(false),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Отмена',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      decoration: AppTheme.gradientButtonDecoration(),
+                      child: ElevatedButton(
+                        onPressed: () => Navigator.of(context).pop(true),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Подтвердить',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
-          ],
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Отмена'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.primaryBlue,
-            ),
-            child: const Text('Подтвердить'),
-          ),
-        ],
       ),
     );
 
@@ -1208,8 +1307,7 @@ class _TransferScreenState extends State<TransferScreen> {
       if (recipientAccountId == null || recipientAccountId.isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-                content: Text('Отсутствует номер счёта получателя')),
+            AppTheme.errorSnackBar('Отсутствует номер счёта получателя'),
           );
         }
         return;
@@ -1266,18 +1364,14 @@ class _TransferScreenState extends State<TransferScreen> {
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content:
-              Text('Долг добавлен в список. Мы напомним о возврате!'),
-              backgroundColor: AppTheme.successGreen,
-            ),
+            AppTheme.successSnackBar('Долг добавлен в список. Мы напомним о возврате!'),
           );
         }
       }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Перевод выполнен успешно!')),
+          AppTheme.successSnackBar('Перевод выполнен успешно!'),
         );
 
         _amountController.clear();
@@ -1298,5 +1392,38 @@ class _TransferScreenState extends State<TransferScreen> {
         context.read<AccountProvider>().fetchAllAccounts();
       }
     }
+  }
+
+  Widget _buildInfoRow(String label, String value, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: AppTheme.primaryBlue),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppTheme.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppTheme.textPrimary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }

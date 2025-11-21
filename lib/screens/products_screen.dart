@@ -129,14 +129,21 @@ class _ProductList extends StatelessWidget {
             left: 16,
             right: 16,
             bottom: 110,
-            child: ElevatedButton.icon(
-              onPressed: () => _showIssueCardDialog(context),
-              icon: const Icon(Icons.add_card),
-              label: const Text('Выпустить карту на существующий счет'),
-              style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: AppTheme.accentBlue,
-                foregroundColor: Colors.white,
+            child: Container(
+              decoration: AppTheme.gradientButtonDecoration(),
+              child: ElevatedButton.icon(
+                onPressed: () => _showIssueCardDialog(context),
+                icon: const Icon(Icons.add_card),
+                label: const Text('Выпустить карту на существующий счет'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  backgroundColor: Colors.transparent,
+                  shadowColor: Colors.transparent,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
               ),
             ),
           ),
@@ -154,39 +161,169 @@ class _ProductList extends StatelessWidget {
   void _showProductDialog(BuildContext context, product) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(product.productName),
-        content: SingleChildScrollView(
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+        child: Container(
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.white, AppTheme.iceBlue],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(24),
+          ),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Банк: ${ApiConfig.getBankName(product.bankCode)}'),
-              const SizedBox(height: 8),
-              Text('Описание: ${product.description}'),
-              const SizedBox(height: 8),
-              if (product.interestRate != null)
-                Text('Ставка: ${product.interestRate}%'),
-              if (product.minAmount != null)
-                Text('Мин. сумма: ${product.minAmount}'),
-              if (product.maxAmount != null)
-                Text('Макс. сумма: ${product.maxAmount}'),
-              if (product.termMonths != null)
-                Text('Срок: ${product.termMonths} мес.'),
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      product.productName.toLowerCase().contains('вклад') ? Icons.savings_rounded :
+                      product.productName.toLowerCase().contains('кредит') ? Icons.account_balance_wallet_rounded :
+                      Icons.credit_card_rounded,
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          product.productName,
+                          style: const TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          ApiConfig.getBankName(product.bankCode),
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Container(
+                padding: const EdgeInsets.all(16),
+                decoration: AppTheme.modernCardDecoration(borderRadius: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      product.description,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppTheme.textPrimary,
+                        height: 1.4,
+                      ),
+                    ),
+                    if (product.interestRate != null || product.minAmount != null ||
+                        product.maxAmount != null || product.termMonths != null) ...[
+                      const SizedBox(height: 16),
+                      const Divider(),
+                      const SizedBox(height: 12),
+                    ],
+                    if (product.interestRate != null)
+                      _buildDetailRow(Icons.percent_rounded, 'Ставка', '${product.interestRate}%'),
+                    if (product.minAmount != null)
+                      _buildDetailRow(Icons.arrow_downward_rounded, 'Мин. сумма', product.minAmount),
+                    if (product.maxAmount != null)
+                      _buildDetailRow(Icons.arrow_upward_rounded, 'Макс. сумма', product.maxAmount),
+                    if (product.termMonths != null)
+                      _buildDetailRow(Icons.calendar_month_rounded, 'Срок', '${product.termMonths} мес.'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 24),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: const Text(
+                        'Закрыть',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      decoration: AppTheme.gradientButtonDecoration(),
+                      child: ElevatedButton(
+                        onPressed: () {
+                          Navigator.pop(context);
+                          _openProduct(context, product);
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          shadowColor: Colors.transparent,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Оформить',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Закрыть'),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: AppTheme.primaryBlue),
+          const SizedBox(width: 8),
+          Text(
+            '$label: ',
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppTheme.textSecondary,
+              fontWeight: FontWeight.w500,
+            ),
           ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _openProduct(context, product);
-            },
-            child: const Text('Оформить'),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppTheme.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
           ),
         ],
       ),
@@ -199,7 +336,7 @@ class _ProductList extends StatelessWidget {
 
     if (accounts.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Нет доступных счетов')),
+        AppTheme.warningSnackBar('Нет доступных счетов'),
       );
       return;
     }
@@ -255,10 +392,15 @@ class _OpenProductDialogState extends State<_OpenProductDialog> {
           DropdownButtonFormField<String>(
             value: _selectedAccountId,
             decoration: const InputDecoration(labelText: 'Счет списания'),
+            isExpanded: true,
             items: accountsList.map<DropdownMenuItem<String>>((account) {
               return DropdownMenuItem<String>(
                 value: account.accountId,
-                child: Text(account.displayName),
+                child: Text(
+                  '${account.displayName} • ${ApiConfig.getBankName(account.bankCode)}',
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
               );
             }).toList(),
             onChanged: (value) => setState(() => _selectedAccountId = value),
@@ -288,10 +430,18 @@ class _OpenProductDialogState extends State<_OpenProductDialog> {
     final amount = double.tryParse(_amountController.text);
     if (amount == null || _selectedAccountId == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Заполните все поля')),
+        AppTheme.warningSnackBar('Заполните все поля'),
       );
       return;
     }
+
+    // Find the selected account to get its identification
+    final selectedAccount = widget.accounts.firstWhere(
+      (acc) => acc.accountId == _selectedAccountId,
+    );
+
+    // Use identification if available, otherwise use accountId
+    final sourceAccountIdentifier = selectedAccount.identification ?? _selectedAccountId;
 
     setState(() => _isProcessing = true);
 
@@ -301,19 +451,19 @@ class _OpenProductDialogState extends State<_OpenProductDialog> {
         product: widget.product,
         amount: amount,
         termMonths: widget.product.termMonths,
-        sourceAccountId: _selectedAccountId,
+        sourceAccountId: sourceAccountIdentifier,
       );
 
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Продукт успешно оформлен!')),
+          AppTheme.successSnackBar('Продукт успешно оформлен!'),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          AppTheme.errorSnackBar('Ошибка: $e'),
         );
       }
     } finally {
@@ -421,7 +571,7 @@ class _IssueCardDialogState extends State<_IssueCardDialog> {
   Future<void> _submit() async {
     if (_selectedAccountId == null || _selectedBank == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Выберите банк и счет')),
+        AppTheme.warningSnackBar('Выберите банк и счет'),
       );
       return;
     }
@@ -430,12 +580,21 @@ class _IssueCardDialogState extends State<_IssueCardDialog> {
 
     try {
       final authService = context.read<AuthService>();
+      final accountProvider = context.read<AccountProvider>();
       final service = authService.getBankService(_selectedBank!);
       final consent = await authService.getProductConsent(_selectedBank!);
 
+      // Find the selected account to get its identification
+      final selectedAccount = accountProvider.accounts.firstWhere(
+        (acc) => acc.accountId == _selectedAccountId,
+      );
+
+      // Use identification if available, otherwise use accountId
+      final accountIdentifier = selectedAccount.identification ?? _selectedAccountId!;
+
       await service.issueCard(
         clientId: authService.clientId,
-        accountId: _selectedAccountId!,
+        accountId: accountIdentifier,
         cardType: _cardType,
         consentId: consent.consentId,
       );
@@ -443,13 +602,13 @@ class _IssueCardDialogState extends State<_IssueCardDialog> {
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Карта успешно выпущена!')),
+          AppTheme.successSnackBar('Карта успешно выпущена!'),
         );
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка: $e')),
+          AppTheme.errorSnackBar('Ошибка: $e'),
         );
       }
     } finally {

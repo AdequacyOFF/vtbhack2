@@ -272,4 +272,81 @@ class AppTheme {
       ],
     );
   }
+
+  // Modern styled SnackBar with rounded corners and transparency
+  static SnackBar styledSnackBar({
+    required String message,
+    Color? backgroundColor,
+    Duration duration = const Duration(seconds: 3),
+    SnackBarAction? action,
+    IconData? icon,
+  }) {
+    final bgColor = backgroundColor ?? primaryBlue;
+    return SnackBar(
+      content: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, color: Colors.white, size: 20),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+      backgroundColor: bgColor.withValues(alpha: 0.95),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+      ),
+      margin: const EdgeInsets.all(16),
+      duration: duration,
+      action: action,
+      elevation: 8,
+    );
+  }
+
+  // Convenience methods for different notification types
+  static SnackBar successSnackBar(String message, {SnackBarAction? action}) {
+    return styledSnackBar(
+      message: message,
+      backgroundColor: successGreen,
+      icon: Icons.check_circle_rounded,
+      action: action,
+    );
+  }
+
+  static SnackBar errorSnackBar(String message, {SnackBarAction? action}) {
+    return styledSnackBar(
+      message: message,
+      backgroundColor: errorRed,
+      icon: Icons.error_rounded,
+      action: action,
+    );
+  }
+
+  static SnackBar warningSnackBar(String message, {SnackBarAction? action}) {
+    return styledSnackBar(
+      message: message,
+      backgroundColor: warningOrange,
+      icon: Icons.warning_rounded,
+      action: action,
+    );
+  }
+
+  static SnackBar infoSnackBar(String message, {SnackBarAction? action}) {
+    return styledSnackBar(
+      message: message,
+      backgroundColor: primaryBlue,
+      icon: Icons.info_rounded,
+      action: action,
+    );
+  }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../services/notification_service.dart';
+import '../config/app_theme.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -16,6 +17,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       appBar: AppBar(
         title: const Text('Уведомления'),
         actions: [
+          Consumer<NotificationService>(
+            builder: (context, notificationService, _) {
+              final autoDeleteCount = notificationService.autoDeleteableCount;
+              if (autoDeleteCount > 0) {
+                return IconButton(
+                  icon: Badge(
+                    label: Text(autoDeleteCount.toString()),
+                    child: const Icon(Icons.auto_delete),
+                  ),
+                  onPressed: () => _autoDeleteRead(notificationService),
+                  tooltip: 'Удалить прочитанные ($autoDeleteCount)',
+                );
+              }
+              return const SizedBox.shrink();
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.delete_sweep),
             onPressed: _clearAllNotifications,
@@ -69,10 +86,44 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   margin: const EdgeInsets.only(bottom: 12),
                   color: _getNotificationColor(notification.type),
                   child: ListTile(
-                    leading: _getNotificationIcon(notification.type),
-                    title: Text(
-                      notification.title,
-                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    leading: Stack(
+                      children: [
+                        _getNotificationIcon(notification.type),
+                        if (notification.isImportant)
+                          Positioned(
+                            right: 0,
+                            bottom: 0,
+                            child: Container(
+                              width: 12,
+                              height: 12,
+                              decoration: BoxDecoration(
+                                color: AppTheme.errorRed,
+                                shape: BoxShape.circle,
+                                border: Border.all(color: Colors.white, width: 1.5),
+                              ),
+                              child: const Icon(
+                                Icons.star,
+                                color: Colors.white,
+                                size: 8,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                    title: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            notification.title,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                        if (!notification.isImportant && !notification.isUnread)
+                          const Tooltip(
+                            message: 'Будет удалено автоматически',
+                            child: Icon(Icons.auto_delete, size: 16, color: Colors.grey),
+                          ),
+                      ],
                     ),
                     subtitle: Text(notification.message),
                     trailing: Column(
@@ -104,6 +155,33 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             },
           );
         },
+      ),
+    );
+  }
+
+  void _autoDeleteRead(NotificationService notificationService) {
+    final count = notificationService.autoDeleteableCount;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Удалить прочитанные?'),
+        content: Text('Будет удалено $count прочитанных неважных уведомлений.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Отмена'),
+          ),
+          TextButton(
+            onPressed: () {
+              notificationService.autoDeleteReadUnimportant();
+              Navigator.of(context).pop();
+              ScaffoldMessenger.of(context).showSnackBar(
+                AppTheme.successSnackBar('Удалено $count уведомлений'),
+              );
+            },
+            child: const Text('Удалить'),
+          ),
+        ],
       ),
     );
   }
