@@ -111,37 +111,39 @@ class _TransferScreenState extends State<TransferScreen> {
                   maxLength: 100,
                 ),
               ),
-              const SizedBox(height: 14),
-              _buildGlassSection(
-                child: CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: const Text(
-                    'Это долг',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textPrimary,
+              if (_transferType != TransferType.ownAccounts) ...[
+                const SizedBox(height: 14),
+                _buildGlassSection(
+                  child: CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text(
+                      'Это долг',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.textPrimary,
+                      ),
                     ),
-                  ),
-                  subtitle: const Text(
-                    'Мы напомним о возврате в выбранный день',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: AppTheme.textSecondary,
+                    subtitle: const Text(
+                      'Мы напомним о возврате в выбранный день',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
                     ),
+                    value: _isDebt,
+                    onChanged: (value) {
+                      setState(() {
+                        _isDebt = value ?? false;
+                        if (!_isDebt) {
+                          _returnDate = null;
+                        }
+                      });
+                    },
+                    secondary: const Icon(Icons.calendar_month_rounded),
                   ),
-                  value: _isDebt,
-                  onChanged: (value) {
-                    setState(() {
-                      _isDebt = value ?? false;
-                      if (!_isDebt) {
-                        _returnDate = null;
-                      }
-                    });
-                  },
-                  secondary: const Icon(Icons.calendar_month_rounded),
                 ),
-              ),
+              ],
               if (_isDebt) ...[
                 const SizedBox(height: 10),
                 _buildGlassSection(
@@ -537,6 +539,11 @@ class _TransferScreenState extends State<TransferScreen> {
                     _selectedContact = null;
                     _recipientIdController.clear();
                     _selectedRecipientBank = null;
+                    // Reset debt state when switching to own accounts
+                    if (_transferType == TransferType.ownAccounts) {
+                      _isDebt = false;
+                      _returnDate = null;
+                    }
                   });
                 },
               ),
