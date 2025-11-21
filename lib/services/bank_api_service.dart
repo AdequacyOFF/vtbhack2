@@ -509,7 +509,7 @@ class BankApiService {
 
     return await _executeWithRetry(() async {
       final response = await http.get(
-        Uri.parse('$baseUrl/product-agreement-consents/$consentId'),
+        Uri.parse('$baseUrl/product-agreement-consents/consent/$consentId?client_id=$clientId'),
         headers: {
           'Authorization': 'Bearer ${token.accessToken}',
           'accept': 'application/json',
@@ -1117,11 +1117,18 @@ class BankApiService {
       if (paymentConsentId != null) 'x-payment-consent-id': paymentConsentId,
     };
 
+    print('[$bankCode] Creating payment with body: ${jsonEncode(body)}');
+    print('[$bankCode] Payment consent ID: $paymentConsentId');
+    print('[$bankCode] Account consent ID: $accountConsentId');
+
     final response = await http.post(
       Uri.parse('$baseUrl/payments?client_id=$clientId'),
       headers: headers,
       body: jsonEncode(body),
     );
+
+    print('[$bankCode] Payment creation response code: ${response.statusCode}');
+    print('[$bankCode] Payment creation response body: ${response.body}');
 
     if (response.statusCode == 201 || response.statusCode == 200) {
       return jsonDecode(response.body);

@@ -37,35 +37,31 @@ class TransferProvider with ChangeNotifier {
       final accountConsent = await _authService.getAccountConsent(fromAccount.bankCode);
       print('[$fromAccount.bankCode] Using account consent: ${accountConsent.consentId}');
 
-      // NEW STRATEGY: Create a single_use consent for this specific transfer
-      print('[$fromAccount.bankCode] Creating single_use payment consent for transfer');
+      print('[$fromAccount.bankCode] Creating transfer');
+      print('[$fromAccount.bankCode] From account - ID: ${fromAccount.accountId}, Identification: ${fromAccount.identification}');
+      print('[$fromAccount.bankCode] To account - ID: ${toAccount.accountId}, Identification: ${toAccount.identification}');
 
-      final singleUseConsent = await fromService.createPaymentConsent(
-        clientId,
-        fromAccount.identification ?? fromAccount.accountId,
-        consentType: 'single_use',
-        amount: amount,
-        creditorAccount: toAccount.identification ?? toAccount.accountId,
-        creditorName: toAccount.name ?? 'Recipient',
-        reference: comment ?? 'Transfer',
-      );
+      final debtorIdentification = fromAccount.identification ?? fromAccount.accountId;
+      final creditorIdentification = toAccount.identification ?? toAccount.accountId;
 
-      print('[$fromAccount.bankCode] Single-use consent created: ${singleUseConsent.consentId}');
+      // Get the VRP payment consent for this bank (requires debtor account)
+      final paymentConsent = await _authService.getPaymentConsent(fromAccount.bankCode, debtorIdentification);
+      print('[$fromAccount.bankCode] Using VRP payment consent: ${paymentConsent.consentId}');
 
-      // Wait a moment for consent to be processed
-      await Future.delayed(const Duration(milliseconds: 500));
+      print('[$fromAccount.bankCode] Using debtor identification: $debtorIdentification');
+      print('[$fromAccount.bankCode] Using creditor identification: $creditorIdentification');
 
-      // Create payment using BOTH the account consent and the payment consent
+      // Create payment using the VRP consent (allows multiple transfers)
       final result = await fromService.createPayment(
         clientId: clientId,
-        debtorAccountId: fromAccount.identification ?? fromAccount.accountId,
-        creditorAccountId: toAccount.identification ?? toAccount.accountId,
+        debtorAccountId: debtorIdentification,
+        creditorAccountId: creditorIdentification,
         amount: amount,
         comment: comment,
         currency: fromAccount.currency,
         creditorBankCode: isInterBank ? toAccount.bankCode : null,
         accountConsentId: accountConsent.consentId,
-        paymentConsentId: singleUseConsent.consentId,
+        paymentConsentId: paymentConsent.consentId,
       );
 
       _lastPaymentId = result['data']['paymentId'];
