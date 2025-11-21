@@ -18,7 +18,6 @@ import 'screens/home_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Yandex MapKit with API key
   await yandex_init.initMapkit(apiKey: ApiConfig.yandexMapsApiKey);
 
   runApp(const MyApp());
@@ -38,9 +37,10 @@ class MyApp extends StatelessWidget {
           create: (_) => NotificationService(),
         ),
         ProxyProvider<AuthService, ConsentPollingService>(
-          create: (context) => ConsentPollingService(context.read<AuthService>()),
+          create: (context) =>
+              ConsentPollingService(context.read<AuthService>()),
           update: (context, authService, previous) =>
-              previous ?? ConsentPollingService(authService),
+          previous ?? ConsentPollingService(authService),
           dispose: (_, pollingService) => pollingService.dispose(),
         ),
         ChangeNotifierProxyProvider<AuthService, AccountProvider>(
@@ -49,10 +49,11 @@ class MyApp extends StatelessWidget {
             context.read<NotificationService>(),
           ),
           update: (context, authService, previous) =>
-          previous ?? AccountProvider(
-            authService,
-            context.read<NotificationService>(),
-          ),
+          previous ??
+              AccountProvider(
+                authService,
+                context.read<NotificationService>(),
+              ),
         ),
         ChangeNotifierProxyProvider<AuthService, ProductProvider>(
           create: (context) => ProductProvider(
@@ -60,10 +61,11 @@ class MyApp extends StatelessWidget {
             context.read<NotificationService>(),
           ),
           update: (context, authService, previous) =>
-          previous ?? ProductProvider(
-            authService,
-            context.read<NotificationService>(),
-          ),
+          previous ??
+              ProductProvider(
+                authService,
+                context.read<NotificationService>(),
+              ),
         ),
         ChangeNotifierProxyProvider<AuthService, TransferProvider>(
           create: (context) => TransferProvider(
@@ -71,15 +73,17 @@ class MyApp extends StatelessWidget {
             context.read<NotificationService>(),
           ),
           update: (context, authService, previous) =>
-          previous ?? TransferProvider(
-            authService,
-            context.read<NotificationService>(),
-          ),
+          previous ??
+              TransferProvider(
+                authService,
+                context.read<NotificationService>(),
+              ),
         ),
         ChangeNotifierProvider<NewsProvider>(
           create: (_) => NewsProvider(),
         ),
-        ChangeNotifierProxyProvider<NotificationService, VirtualAccountProvider>(
+        ChangeNotifierProxyProvider<NotificationService,
+            VirtualAccountProvider>(
           create: (context) => VirtualAccountProvider(
             context.read<NotificationService>(),
           ),
@@ -92,6 +96,19 @@ class MyApp extends StatelessWidget {
         theme: AppTheme.lightTheme,
         debugShowCheckedModeBanner: false,
         home: const AppInitializer(),
+        builder: (context, child) {
+          return GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () {
+              final currentFocus = FocusScope.of(context);
+              if (!currentFocus.hasPrimaryFocus &&
+                  currentFocus.focusedChild != null) {
+                currentFocus.unfocus();
+              }
+            },
+            child: child,
+          );
+        },
       ),
     );
   }
