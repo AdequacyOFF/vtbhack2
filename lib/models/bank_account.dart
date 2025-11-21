@@ -30,13 +30,23 @@ class BankAccount {
   });
 
   factory BankAccount.fromJson(Map<String, dynamic> json, String bankCode) {
-    // Extract account identification if available
+    // Extract account identification - can be in multiple formats
     String? identification;
     String? name;
-    if (json['account'] != null && json['account'] is List && (json['account'] as List).isNotEmpty) {
+
+    // Format 1: Direct fields (standard OpenBanking)
+    if (json['identification'] != null) {
+      identification = json['identification'];
+    }
+    if (json['name'] != null) {
+      name = json['name'];
+    }
+
+    // Format 2: Nested in 'account' array (some banks)
+    if (identification == null && json['account'] != null && json['account'] is List && (json['account'] as List).isNotEmpty) {
       final accountInfo = json['account'][0];
       identification = accountInfo['identification'];
-      name = accountInfo['name'];
+      name = name ?? accountInfo['name'];
     }
 
     return BankAccount(

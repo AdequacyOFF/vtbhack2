@@ -206,11 +206,19 @@ class ProductProvider with ChangeNotifier {
       final clientId = _authService.clientId;
       final service = _authService.getBankService(product.bankCode);
 
+      debugPrint('[ProductProvider] Opening product in bank: ${product.bankCode}');
+      debugPrint('[ProductProvider] Product ID: ${product.productId}');
+      debugPrint('[ProductProvider] Amount: $amount');
+      debugPrint('[ProductProvider] Source account ID received: $sourceAccountId');
+
       final consent = await _authService.getProductConsent(product.bankCode);
 
       if (!consent.isApproved) {
         throw Exception('Product consent not approved for ${product.bankCode}');
       }
+
+      debugPrint('[ProductProvider] Product consent approved: ${consent.consentId}');
+      debugPrint('[ProductProvider] Calling openProductAgreement with sourceAccountId: $sourceAccountId');
 
       final result = await service.openProductAgreement(
         clientId: clientId,

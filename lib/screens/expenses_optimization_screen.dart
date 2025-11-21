@@ -237,7 +237,8 @@ class _ExpensesOptimizationScreenState
       for (final account in babankAccounts) {
         final balance = accountProvider.getBalance(account);
         if (balance >= savings) {
-          sourceAccountId = account.accountId;
+          // CRITICAL: Use identification field for API calls, not accountId
+          sourceAccountId = account.identification ?? account.accountId;
           break;
         }
       }

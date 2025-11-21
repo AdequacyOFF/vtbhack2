@@ -85,9 +85,11 @@ class _TransferScreenState extends State<TransferScreen> {
       appBar: _buildGlassAppBar(context),
       body: Consumer2<AccountProvider, TransferProvider>(
         builder: (context, accountProvider, transferProvider, child) {
+          // Use composite key (bankCode:accountId) to prevent collisions between banks
           final uniqueAccountsMap = <String, BankAccount>{};
           for (var account in accountProvider.accounts) {
-            uniqueAccountsMap[account.accountId] = account;
+            final compositeKey = '${account.bankCode}:${account.accountId}';
+            uniqueAccountsMap[compositeKey] = account;
           }
           final accounts = uniqueAccountsMap.values.toList();
 

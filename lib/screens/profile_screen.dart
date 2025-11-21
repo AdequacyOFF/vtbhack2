@@ -872,19 +872,20 @@ class _PrimaryAccountSelectionScreenState
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        fontSize: 14,
+                                        fontSize: 13,
                                         fontWeight: FontWeight.w600,
                                         color: AppTheme.textPrimary,
+                                        height: 1.0,
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
                                     Text(
                                       '${balance.toStringAsFixed(2)} ${acc.currency}',
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                       style: const TextStyle(
-                                        fontSize: 12,
+                                        fontSize: 11,
                                         color: AppTheme.textSecondary,
+                                        height: 1.0,
                                       ),
                                     ),
                                   ],

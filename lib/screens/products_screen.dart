@@ -360,7 +360,7 @@ class _OpenProductDialog extends StatefulWidget {
 
 class _OpenProductDialogState extends State<_OpenProductDialog> {
   final _amountController = TextEditingController();
-  String? _selectedAccountId;
+  String? _selectedAccountCompositeKey;  // Changed to composite key (bankCode:accountId)
   bool _isProcessing = false;
 
   @override
@@ -371,77 +371,119 @@ class _OpenProductDialogState extends State<_OpenProductDialog> {
 
   @override
   Widget build(BuildContext context) {
-    // Get unique accounts by accountId - ensure proper typing
+    // Filter accounts to only show accounts from the same bank as the product
+    final sameBankAccounts = widget.accounts.where((account) {
+      return account.bankCode == widget.product.bankCode;
+    }).toList();
+
+    // Get unique accounts by composite key (bankCode:accountId) - prevents collisions
     final uniqueAccounts = <String, dynamic>{};
-    for (var account in widget.accounts) {
-      uniqueAccounts[account.accountId] = account;
+    for (var account in sameBankAccounts) {
+      final compositeKey = '${account.bankCode}:${account.accountId}';
+      uniqueAccounts[compositeKey] = account;
     }
     final accountsList = uniqueAccounts.values.cast<dynamic>().toList();
 
     return AlertDialog(
       title: Text('Оформить ${widget.product.productName}'),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          TextField(
-            controller: _amountController,
-            decoration: const InputDecoration(labelText: 'Сумма'),
-            keyboardType: TextInputType.number,
-          ),
-          const SizedBox(height: 16),
-          DropdownButtonFormField<String>(
-            value: _selectedAccountId,
-            decoration: const InputDecoration(labelText: 'Счет списания'),
-            isExpanded: true,
-            items: accountsList.map<DropdownMenuItem<String>>((account) {
-              return DropdownMenuItem<String>(
-                value: account.accountId,
-                child: Text(
-                  '${account.displayName} • ${ApiConfig.getBankName(account.bankCode)}',
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+      content: accountsList.isEmpty
+          ? Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.warning_amber_rounded, size: 48, color: AppTheme.warningOrange),
+                const SizedBox(height: 16),
+                Text(
+                  'У вас нет счетов в ${ApiConfig.getBankName(widget.product.bankCode)}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 16),
                 ),
-              );
-            }).toList(),
-            onChanged: (value) => setState(() => _selectedAccountId = value),
-          ),
-        ],
-      ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Для открытия продукта необходим счет в этом же банке',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: _amountController,
+                  decoration: const InputDecoration(labelText: 'Сумма'),
+                  keyboardType: TextInputType.number,
+                ),
+                const SizedBox(height: 16),
+                DropdownButtonFormField<String>(
+                  value: _selectedAccountCompositeKey,
+                  decoration: InputDecoration(
+                    labelText: 'Счет списания (${ApiConfig.getBankName(widget.product.bankCode)})',
+                  ),
+                  isExpanded: true,
+                  items: accountsList.map<DropdownMenuItem<String>>((account) {
+                    final compositeKey = '${account.bankCode}:${account.accountId}';
+                    return DropdownMenuItem<String>(
+                      value: compositeKey,  // Use composite key as value
+                      child: Text(
+                        account.displayName,
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (value) => setState(() => _selectedAccountCompositeKey = value),
+                ),
+              ],
+            ),
       actions: [
         TextButton(
           onPressed: _isProcessing ? null : () => Navigator.pop(context),
           child: const Text('Отмена'),
         ),
-        ElevatedButton(
-          onPressed: _isProcessing ? null : _submit,
-          child: _isProcessing
-              ? const SizedBox(
-            width: 20,
-            height: 20,
-            child: CircularProgressIndicator(strokeWidth: 2),
-          )
-              : const Text('Оформить'),
-        ),
+        if (accountsList.isNotEmpty)
+          ElevatedButton(
+            onPressed: _isProcessing ? null : _submit,
+            child: _isProcessing
+                ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+                : const Text('Оформить'),
+          ),
       ],
     );
   }
 
   Future<void> _submit() async {
     final amount = double.tryParse(_amountController.text);
-    if (amount == null || _selectedAccountId == null) {
+    if (amount == null || _selectedAccountCompositeKey == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         AppTheme.warningSnackBar('Заполните все поля'),
       );
       return;
     }
 
-    // Find the selected account to get its identification
+    // Parse composite key to get bankCode and accountId
+    final parts = _selectedAccountCompositeKey!.split(':');
+    final bankCode = parts[0];
+    final accountId = parts[1];
+
+    // Find the selected account using composite key
     final selectedAccount = widget.accounts.firstWhere(
-      (acc) => acc.accountId == _selectedAccountId,
+      (acc) => acc.bankCode == bankCode && acc.accountId == accountId,
     );
 
     // Use identification if available, otherwise use accountId
-    final sourceAccountIdentifier = selectedAccount.identification ?? _selectedAccountId;
+    final sourceAccountIdentifier = selectedAccount.identification ?? accountId;
+
+    debugPrint('[ProductsScreen] Opening product: ${widget.product.productName}');
+    debugPrint('[ProductsScreen] Selected composite key: $_selectedAccountCompositeKey');
+    debugPrint('[ProductsScreen] Selected accountId: $accountId');
+    debugPrint('[ProductsScreen] Selected account identification: ${selectedAccount.identification}');
+    debugPrint('[ProductsScreen] Source account identifier to use: $sourceAccountIdentifier');
+    debugPrint('[ProductsScreen] Product bank: ${widget.product.bankCode}');
+    debugPrint('[ProductsScreen] Account bank: ${selectedAccount.bankCode}');
 
     setState(() => _isProcessing = true);
 

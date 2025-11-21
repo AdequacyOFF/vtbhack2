@@ -87,13 +87,27 @@ class ConsentPollingService {
         return;
       }
 
-      // Refresh consent statuses for all pending banks
+      // Refresh consent statuses for all pending banks (all three types)
       for (final bankCode in oldPendingBanks) {
         try {
+          // Refresh account consent
           await authService.refreshAccountConsentStatus(bankCode);
         } catch (e) {
-          debugPrint('[ConsentPolling] Error refreshing consent for $bankCode: $e');
-          // Continue with other banks even if one fails
+          debugPrint('[ConsentPolling] Error refreshing account consent for $bankCode: $e');
+        }
+
+        try {
+          // Refresh payment consent
+          await authService.refreshPaymentConsentStatus(bankCode);
+        } catch (e) {
+          debugPrint('[ConsentPolling] Error refreshing payment consent for $bankCode: $e');
+        }
+
+        try {
+          // Refresh product consent
+          await authService.refreshProductConsentStatus(bankCode);
+        } catch (e) {
+          debugPrint('[ConsentPolling] Error refreshing product consent for $bankCode: $e');
         }
       }
 

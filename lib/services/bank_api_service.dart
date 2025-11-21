@@ -518,6 +518,12 @@ class BankApiService {
       );
 
       print('[$bankCode] Product status check response code: ${response.statusCode}');
+      print('[$bankCode] Product status check response body: ${response.body}');
+
+      if (response.statusCode == 404) {
+        print('[$bankCode] Product consent not found (404) - consent ID may be invalid: $consentId');
+        throw Exception('Product consent not found - ID may need to be recreated');
+      }
 
       if (response.statusCode == 200) {
         try {
@@ -526,25 +532,32 @@ class BankApiService {
           // Check if response has 'data' field
           if (json is Map && json.containsKey('data') && json['data'] != null) {
             final data = json['data'];
+            final status = data['status'] ?? 'pending';
+            print('[$bankCode] Product consent status from API (data field): $status');
 
             // Convert API response format to our internal format
             // Also check for request_id (SBank uses this)
             final consentData = {
               'consent_id': data['consentId'] ?? data['consent_id'] ?? data['request_id'] ?? consentId,
-              'status': data['status'] ?? 'pending',
-              'auto_approved': _isStatusApproved(data['status']),
+              'status': status,
+              'auto_approved': _isStatusApproved(status),
             };
 
+            print('[$bankCode] Product consent parsed - Status: ${consentData["status"]}, Auto-approved: ${consentData["auto_approved"]}');
             return ProductAgreementConsent.fromJson(consentData, bankCode);
           } else {
             // If no 'data' field, try to parse directly
+            final status = json['status'] ?? 'pending';
+            print('[$bankCode] Product consent status from API (direct): $status');
+
             // Also check for request_id (SBank uses this)
             final consentData = {
               'consent_id': json['consentId'] ?? json['consent_id'] ?? json['request_id'] ?? consentId,
-              'status': json['status'] ?? 'pending',
-              'auto_approved': _isStatusApproved(json['status']),
+              'status': status,
+              'auto_approved': _isStatusApproved(status),
             };
 
+            print('[$bankCode] Product consent parsed - Status: ${consentData["status"]}, Auto-approved: ${consentData["auto_approved"]}');
             return ProductAgreementConsent.fromJson(consentData, bankCode);
           }
         } catch (e) {
@@ -657,9 +670,20 @@ class BankApiService {
 
     if (response.statusCode == 200) {
       final json = jsonDecode(response.body);
+      print('[$bankCode] Accounts API response: ${response.body}');
+
       final accounts = (json['data']['account'] as List)
-          .map((account) => BankAccount.fromJson(account, bankCode))
+          .map((account) {
+            print('[$bankCode] Parsing account: $account');
+            return BankAccount.fromJson(account, bankCode);
+          })
           .toList();
+
+      print('[$bankCode] Loaded ${accounts.length} accounts');
+      for (var acc in accounts) {
+        print('[$bankCode] Account - ID: ${acc.accountId}, Identification: ${acc.identification}');
+      }
+
       return accounts;
     } else {
       throw Exception('Failed to get accounts: ${response.body}');
@@ -922,6 +946,12 @@ class BankApiService {
       if (sourceAccountId != null) 'source_account_id': sourceAccountId,
     };
 
+    print('[$bankCode] Opening product agreement');
+    print('[$bankCode] Product ID: $productId');
+    print('[$bankCode] Amount: $amount');
+    print('[$bankCode] Source account ID: $sourceAccountId');
+    print('[$bankCode] Request body: ${jsonEncode(body)}');
+
     final response = await http.post(
       Uri.parse('$baseUrl/product-agreements?client_id=$clientId'),
       headers: {
@@ -931,6 +961,9 @@ class BankApiService {
       },
       body: jsonEncode(body),
     );
+
+    print('[$bankCode] Product agreement response code: ${response.statusCode}');
+    print('[$bankCode] Product agreement response body: ${response.body}');
 
     if (response.statusCode == 200) {
       return jsonDecode(response.body);

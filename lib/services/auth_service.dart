@@ -305,6 +305,14 @@ class AuthService {
           // Create account consent
           await recreateAccountConsent(bankCode);
 
+          // Try to create payment consent with empty debtor account (VRP)
+          try {
+            await recreatePaymentConsent(bankCode, '');
+          } catch (e) {
+            // Payment consent creation failed, but continue
+            print('[AuthService] Failed to create payment consent for $bankCode: $e');
+          }
+
           // Try to create product consent (optional, don't fail if it doesn't work)
           try {
             await recreateProductConsent(bankCode);
@@ -341,16 +349,27 @@ class AuthService {
     return false;
   }
 
-  /// Get list of banks with pending consents
+  /// Get list of banks with pending consents (account, payment, or product)
   List<String> get banksWithPendingConsents {
-    final pending = <String>[];
+    final pending = <String>{};
     for (final bankCode in supportedBanks) {
+      // Check account consents
       if (_accountConsents.containsKey(bankCode) &&
           _accountConsents[bankCode]!.isPending) {
         pending.add(bankCode);
       }
+      // Check payment consents
+      if (_paymentConsents.containsKey(bankCode) &&
+          _paymentConsents[bankCode]!.isPending) {
+        pending.add(bankCode);
+      }
+      // Check product consents
+      if (_productConsents.containsKey(bankCode) &&
+          _productConsents[bankCode]!.isPending) {
+        pending.add(bankCode);
+      }
     }
-    return pending;
+    return pending.toList();
   }
 
   /// Check if any consents are pending approval
