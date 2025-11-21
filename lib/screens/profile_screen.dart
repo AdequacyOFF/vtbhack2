@@ -277,24 +277,6 @@ class ProfileScreen extends StatelessWidget {
               );
             },
           ),
-          _buildActionCard(
-            context,
-            icon: Icons.account_balance,
-            title: 'Создать новый счет',
-            subtitle: 'Открыть счет в одном из банков',
-            onTap: () => _showCreateAccountDialog(context),
-          ),
-          _buildActionCard(
-            context,
-            icon: Icons.add_card,
-            title: 'Открыть счет в партнерском банке',
-            subtitle: 'Используя данные текущих счетов',
-            onTap: () {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Функция в разработке')),
-              );
-            },
-          ),
           const SizedBox(height: 16),
           ElevatedButton(
             onPressed: () => _logout(context),
